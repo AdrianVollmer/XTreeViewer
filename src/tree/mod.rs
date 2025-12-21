@@ -51,6 +51,22 @@ impl Tree {
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
+
+    /// Find the parent of a given node by ID
+    /// Returns None if the node is the root or parent is not found
+    pub fn get_parent(&self, child_id: usize) -> Option<usize> {
+        if child_id == self.root_id {
+            return None;
+        }
+
+        for (parent_id, node) in self.nodes.iter().enumerate() {
+            if node.children.contains(&child_id) {
+                return Some(parent_id);
+            }
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]

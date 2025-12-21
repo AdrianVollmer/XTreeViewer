@@ -200,4 +200,29 @@ impl TreeView {
             .and_then(|index| self.visible_nodes.get(index))
             .map(|(node_id, _)| *node_id)
     }
+
+    pub fn collapse_parent(&mut self, tree: &Tree) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                // Find the parent of the current node
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    // Collapse the parent node
+                    self.expanded.remove(&parent_id);
+
+                    // Navigate to the parent node
+                    // Rebuild visible nodes to reflect the collapsed state
+                    self.rebuild_visible_nodes(tree);
+
+                    // Find the index of the parent in the visible nodes
+                    if let Some(parent_index) = self
+                        .visible_nodes
+                        .iter()
+                        .position(|(id, _)| *id == parent_id)
+                    {
+                        self.list_state.select(Some(parent_index));
+                    }
+                }
+            }
+        }
+    }
 }

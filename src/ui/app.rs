@@ -95,7 +95,7 @@ impl App {
             .render(frame, content_chunks[1], selected_node);
 
         // Render status bar
-        let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | q: Quit ";
+        let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | c: Collapse Parent | q: Quit ";
         let status_bar = Paragraph::new(help_text);
         frame.render_widget(status_bar, main_chunks[1]);
     }
@@ -127,6 +127,9 @@ impl App {
             }
             KeyCode::Left | KeyCode::Char('h') => {
                 self.tree_view.collapse(&self.tree);
+            }
+            KeyCode::Char('c') => {
+                self.tree_view.collapse_parent(&self.tree);
             }
             KeyCode::PageUp => {
                 for _ in 0..10 {
