@@ -47,8 +47,8 @@ fn test_parse_sample_ldif() {
     assert_eq!(root.label, "root");
     assert!(root.has_children());
 
-    // Verify we have entries
-    assert!(root.children.len() >= 4); // At least 4 entries in sample.ldif
+    // Root should have dc=example,dc=com as the top-level entry
+    assert!(root.children.len() >= 1);
 }
 
 #[test]
@@ -71,10 +71,10 @@ fn test_ldif_entry_structure() {
     let root = tree.get_node(0).unwrap();
     assert!(root.has_children());
 
-    // Get first entry
+    // Entry attached to root (parent not in file), has full DN
     let entry = tree.get_node(root.children[0]).unwrap();
     assert_eq!(entry.node_type, "entry");
-    assert_eq!(entry.label, "cn=Test,dc=example,dc=com");
+    assert_eq!(entry.label, "cn=Test,dc=example,dc=com"); // Full DN since parent not in file
 
     // Entry should have @attributes child
     let attrs = tree.get_node(entry.children[0]).unwrap();
@@ -96,7 +96,10 @@ mail: second@example.com
     let tree = parser.parse(ldif).unwrap();
 
     let root = tree.get_node(0).unwrap();
+    // Entry attached to root (parent not in file), has full DN
     let entry = tree.get_node(root.children[0]).unwrap();
+    assert_eq!(entry.label, "cn=Test,dc=example,dc=com");
+
     let attrs = tree.get_node(entry.children[0]).unwrap();
 
     // Should have multiple objectClass and mail attributes with indices

@@ -204,10 +204,36 @@ impl<'a> LdifFileParser<'a> {
         let mut tree = Tree::new(TreeNode::new("root", "root"));
         let root_id = tree.root_id();
 
+        // Map from DN to node ID for building hierarchy
+        let mut dn_to_node: HashMap<String, usize> = HashMap::new();
+
         for entry in entries {
-            // Create entry node with DN as label
-            let entry_node = TreeNode::new(&entry.dn, "entry");
+            // Get parent DN
+            let parent_dn = get_parent_dn(&entry.dn);
+
+            // Find parent node (only if it exists, don't create placeholders)
+            let parent_id = if let Some(ref parent) = parent_dn {
+                // Check if parent exists in the entries we've already processed
+                dn_to_node.get(parent).copied().unwrap_or(root_id)
+            } else {
+                // No parent DN, attach to root
+                root_id
+            };
+
+            // Compute RDN (relative to parent if parent exists in tree)
+            let parent_dn_for_label = if parent_id == root_id {
+                None
+            } else {
+                parent_dn.as_deref()
+            };
+            let rdn = compute_rdn(&entry.dn, parent_dn_for_label);
+
+            // Create entry node with RDN as label
+            let entry_node = TreeNode::new(&rdn, "entry");
             let entry_id = tree.add_node(entry_node);
+
+            // Store DN to node mapping
+            dn_to_node.insert(entry.dn.clone(), entry_id);
 
             // Create @attributes virtual node
             let mut attr_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -243,8 +269,8 @@ impl<'a> LdifFileParser<'a> {
             // Link virtual node to entry
             tree.get_node_mut(entry_id).unwrap().add_child(virtual_id);
 
-            // Link entry to root
-            tree.get_node_mut(root_id).unwrap().add_child(entry_id);
+            // Link entry to parent
+            tree.get_node_mut(parent_id).unwrap().add_child(entry_id);
         }
 
         tree
@@ -254,6 +280,58 @@ impl<'a> LdifFileParser<'a> {
 struct LdifEntry {
     dn: String,
     attributes: Vec<(String, String)>,
+}
+
+/// Extract the parent DN from a DN
+/// Example: "cn=John Doe,ou=People,dc=example,dc=com"
+/// Returns: Some("ou=People,dc=example,dc=com")
+fn get_parent_dn(dn: &str) -> Option<String> {
+    // Find the first comma that's not escaped
+    let mut in_quotes = false;
+    let mut escape_next = false;
+
+    for (i, ch) in dn.chars().enumerate() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+
+        match ch {
+            '\\' => escape_next = true,
+            '"' => in_quotes = !in_quotes,
+            ',' if !in_quotes => {
+                // Found the separator, everything after is the parent
+                let parent = dn[i + 1..].trim();
+
+                if parent.is_empty() {
+                    return None;
+                } else {
+                    return Some(parent.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // No comma found, no parent
+    None
+}
+
+/// Compute the relative DN (the part not in the parent)
+/// Example: dn="cn=John Doe,ou=People,dc=example,dc=com", parent="ou=People,dc=example,dc=com"
+/// Returns: "cn=John Doe"
+fn compute_rdn(dn: &str, parent: Option<&str>) -> String {
+    if let Some(parent_dn) = parent {
+        // Remove the parent DN suffix from the full DN
+        if dn.ends_with(parent_dn) {
+            let prefix_len = dn.len() - parent_dn.len();
+            if prefix_len > 0 && dn.as_bytes()[prefix_len - 1] == b',' {
+                return dn[..prefix_len - 1].trim().to_string();
+            }
+        }
+    }
+    // If no parent or doesn't end with parent, return full DN
+    dn.trim().to_string()
 }
 
 fn hex_preview(bytes: &[u8]) -> String {
@@ -294,7 +372,15 @@ cn: Second
         let tree = parser.parse(ldif).unwrap();
 
         let root = tree.get_node(0).unwrap();
+        // Root should have both entries directly (parent dc=example,dc=com not in file)
         assert_eq!(root.children.len(), 2);
+
+        // Both should have full DNs as labels
+        let first_entry = tree.get_node(root.children[0]).unwrap();
+        assert_eq!(first_entry.label, "cn=First,dc=example,dc=com");
+
+        let second_entry = tree.get_node(root.children[1]).unwrap();
+        assert_eq!(second_entry.label, "cn=Second,dc=example,dc=com");
     }
 
     #[test]
@@ -319,8 +405,13 @@ objectClass: organizationalPerson
         let tree = parser.parse(ldif).unwrap();
 
         let root = tree.get_node(0).unwrap();
+        // Entry attached to root (parent not in file), has full DN
         let entry = tree.get_node(root.children[0]).unwrap();
+        assert_eq!(entry.label, "cn=Test,dc=example,dc=com");
+
+        // Entry's first child should be @attributes
         let attrs = tree.get_node(entry.children[0]).unwrap();
+        assert_eq!(attrs.node_type, "@attributes");
 
         // Should have dn + 3 objectClass attributes
         assert!(attrs.children.len() >= 4);
@@ -387,8 +478,10 @@ cn: Test
         let tree = parser.parse(ldif).unwrap();
 
         let root = tree.get_node(0).unwrap();
+        // Entry attached to root (parent not in file), has full DN
         let entry = tree.get_node(root.children[0]).unwrap();
         assert_eq!(entry.node_type, "entry");
+        assert_eq!(entry.label, "cn=Test,dc=example,dc=com");
 
         // First child should be @attributes
         let attrs = tree.get_node(entry.children[0]).unwrap();
@@ -435,5 +528,75 @@ cn: Test
         let parser = LdifParser;
         let result = parser.parse(ldif);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_hierarchical_structure() {
+        let ldif = r#"version: 1
+
+dn: dc=example,dc=com
+objectClass: top
+dc: example
+
+dn: ou=People,dc=example,dc=com
+objectClass: organizationalUnit
+ou: People
+
+dn: cn=John Doe,ou=People,dc=example,dc=com
+objectClass: person
+cn: John Doe
+"#;
+        let parser = LdifParser;
+        let tree = parser.parse(ldif).unwrap();
+
+        let root = tree.get_node(0).unwrap();
+
+        // Root should have dc=example,dc=com (full DN since no parent in file)
+        assert_eq!(root.children.len(), 1);
+        let dc_node = tree.get_node(root.children[0]).unwrap();
+        assert_eq!(dc_node.label, "dc=example,dc=com");
+
+        // dc=example,dc=com should have @attributes and ou=People
+        // First child is @attributes, find ou=People
+        let ou_node = dc_node.children.iter()
+            .map(|&id| tree.get_node(id).unwrap())
+            .find(|n| n.node_type == "entry")
+            .expect("Should have ou=People entry");
+        assert_eq!(ou_node.label, "ou=People"); // Relative to parent
+
+        // ou=People should have @attributes and cn=John Doe
+        let cn_node = ou_node.children.iter()
+            .map(|&id| tree.get_node(id).unwrap())
+            .find(|n| n.node_type == "entry")
+            .expect("Should have cn=John Doe entry");
+        assert_eq!(cn_node.label, "cn=John Doe"); // Relative to parent
+    }
+
+    #[test]
+    fn test_dn_parsing() {
+        // Test get_parent_dn
+        assert_eq!(
+            get_parent_dn("cn=John Doe,ou=People,dc=example,dc=com"),
+            Some("ou=People,dc=example,dc=com".to_string())
+        );
+        assert_eq!(get_parent_dn("dc=com"), None);
+        assert_eq!(
+            get_parent_dn("cn=Doe\\, John,ou=People"),
+            Some("ou=People".to_string())
+        );
+
+        // Test compute_rdn
+        assert_eq!(
+            compute_rdn("cn=John Doe,ou=People,dc=example,dc=com", Some("ou=People,dc=example,dc=com")),
+            "cn=John Doe"
+        );
+        assert_eq!(
+            compute_rdn("ou=People,dc=example,dc=com", Some("dc=example,dc=com")),
+            "ou=People"
+        );
+        assert_eq!(
+            compute_rdn("dc=example,dc=com", None),
+            "dc=example,dc=com"
+        );
     }
 }
