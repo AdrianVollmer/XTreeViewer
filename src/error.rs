@@ -15,6 +15,9 @@ pub enum XtvError {
     #[error("HTML parsing error: {0}")]
     HtmlParse(String),
 
+    #[error("LDIF parsing error at line {line}: {message}")]
+    LdifParse { line: usize, message: String },
+
     #[error("Unsupported file format: {0}")]
     UnsupportedFormat(String),
 
