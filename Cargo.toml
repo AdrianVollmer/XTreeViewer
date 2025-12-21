@@ -1,11 +1,11 @@
 [package]
 name = "xtv"
 version = "0.1.0"
-edition = "2018"
-authors = ["XTV Contributors"]
+edition = "2024"
+authors = ["Adrian Vollmer"]
 description = "X Tree Viewer - A TUI application to view tree structures from serialized data"
 license = "MIT"
-repository = "https://github.com/yourusername/xtv"
+repository = "https://github.com/AdrianVollmer/XTreeViewer"
 readme = "README.md"
 
 [[bin]]
