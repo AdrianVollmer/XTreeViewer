@@ -1,1 +1,7 @@
 _issues/*
+
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb

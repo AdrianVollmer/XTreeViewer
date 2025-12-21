@@ -1,0 +1,33 @@
+[package]
+name = "xtv"
+version = "0.1.0"
+edition = "2018"
+authors = ["XTV Contributors"]
+description = "X Tree Viewer - A TUI application to view tree structures from serialized data"
+license = "MIT"
+repository = "https://github.com/yourusername/xtv"
+readme = "README.md"
+
+[[bin]]
+name = "xtv"
+path = "src/main.rs"
+
+[dependencies]
+# TUI framework
+ratatui = "0.26"
+crossterm = "0.27"
+
+# CLI argument parsing
+clap = { version = "3.2", features = ["derive"] }
+
+# Serialization and parsing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+quick-xml = "0.31"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.13"
