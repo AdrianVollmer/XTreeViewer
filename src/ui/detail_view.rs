@@ -78,38 +78,26 @@ impl DetailView {
             ))));
 
             // All attributes
-            for (idx, attr) in node.attributes.iter().enumerate() {
-                // Attribute key
+            for attr in node.attributes.iter() {
+                // Attribute key line: 4 spaces indent
                 items.push(ListItem::new(Line::from(vec![
-                    Span::raw("  "),
+                    Span::raw("    "),
                     Span::styled(
-                        format!("[{}] ", idx + 1),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                    Span::styled(
-                        attr.key.clone(),
+                        format!("{}:", attr.key),
                         Style::default()
                             .fg(Color::Blue)
                             .add_modifier(Modifier::BOLD),
                     ),
                 ])));
 
-                // Attribute value (potentially multi-line)
+                // Attribute value lines: 8 spaces indent
                 let value_lines =
-                    self.wrap_text(&attr.value, (area.width as usize).saturating_sub(6));
-                for (line_idx, line) in value_lines.iter().enumerate() {
-                    if line_idx == 0 {
-                        items.push(ListItem::new(Line::from(vec![
-                            Span::raw("    "),
-                            Span::styled("→ ", Style::default().fg(Color::DarkGray)),
-                            Span::styled(line.clone(), Style::default().fg(Color::Green)),
-                        ])));
-                    } else {
-                        items.push(ListItem::new(Line::from(vec![
-                            Span::raw("      "),
-                            Span::styled(line.clone(), Style::default().fg(Color::Green)),
-                        ])));
-                    }
+                    self.wrap_text(&attr.value, (area.width as usize).saturating_sub(8));
+                for line in value_lines.iter() {
+                    items.push(ListItem::new(Line::from(vec![
+                        Span::raw("        "),
+                        Span::styled(line.clone(), Style::default().fg(Color::Green)),
+                    ])));
                 }
             }
         } else {

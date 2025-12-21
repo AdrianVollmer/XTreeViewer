@@ -98,25 +98,25 @@ impl TreeView {
             Color::Cyan
         };
         spans.push(Span::styled(&node.label, Style::default().fg(label_color)));
-        spans.push(Span::raw(" "));
 
-        // Node type
-        spans.push(Span::styled(
-            format!("[{}]", node.node_type),
-            Style::default().fg(Color::DarkGray),
-        ));
-
-        // For attribute nodes, show the value
-        // For regular nodes, DON'T show first attribute anymore (that's what we're fixing!)
+        // For attribute nodes, show key: value (no type bracket)
+        // For regular nodes, show type and DON'T show first attribute anymore
         if node.is_attribute() {
             if let Some(attr) = node.attributes.first() {
                 let value = if attr.value.len() > 40 {
-                    format!(" = {}...", &attr.value[..40])
+                    format!(": {}...", &attr.value[..40])
                 } else {
-                    format!(" = {}", attr.value)
+                    format!(": {}", attr.value)
                 };
                 spans.push(Span::styled(value, Style::default().fg(Color::Green)));
             }
+        } else {
+            // Only show node type for non-attribute nodes
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                format!("[{}]", node.node_type),
+                Style::default().fg(Color::DarkGray),
+            ));
         }
 
         ListItem::new(Line::from(spans))
