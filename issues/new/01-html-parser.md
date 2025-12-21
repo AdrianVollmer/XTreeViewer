@@ -1,0 +1,3 @@
+# HTML Parser
+
+Add HTML parsing support to XTV to allow viewing HTML documents as tree structures. Implement a new parser using the `scraper` crate that can parse HTML files and convert them into the internal tree representation. The parser should handle HTML elements as nodes, with element names as labels, attributes preserved in the node attributes collection, and text content stored appropriately. The parser should follow the same pattern as the existing JSON and XML parsers, implementing the `Parser` trait and checking for `.html` and `.htm` file extensions. Add appropriate tests and a sample HTML file in the `examples/` directory.

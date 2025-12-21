@@ -1,0 +1,3 @@
+# Lazy Loading
+
+Implement lazy loading for nodes with many children to improve performance when dealing with large tree structures. When a node has more than 100 child nodes (configurable threshold), only load and display the first 100 children initially. Add a special `[...]` indicator node at the end to show that more children are available. When the user navigates to or expands this indicator, load the next batch of children. This feature should be implemented in the tree view component and should maintain smooth scrolling performance. Consider adding configuration options for the batch size and whether lazy loading is enabled.

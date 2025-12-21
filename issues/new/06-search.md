@@ -1,0 +1,3 @@
+# Search Functionality
+
+Implement search functionality to allow users to find nodes by name or value within the tree structure. Add a search mode activated by pressing `/` (similar to vim), which displays a search input box in the UI. The search should support case-insensitive matching by default, with an option for case-sensitive search. Highlight matching nodes in the tree view and allow users to jump between matches using `n` (next) and `N` (previous). The search should work across node labels, types, and attribute values. Display the current match count (e.g., "3/15") in the search box. Consider adding regex support for advanced search patterns.
