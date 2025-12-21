@@ -65,9 +65,9 @@ impl TreeView {
         let icon = if node.is_virtual_attributes() {
             // Virtual attribute nodes get hollow/solid diamond
             if self.expanded.contains(&node_id) {
-                "◆" // Solid diamond when expanded
+                "▽" // Hollow triangle down when expanded
             } else {
-                "◇" // Hollow diamond when collapsed
+                "▷" // Hollow triangle right when collapsed
             }
         } else if node.has_children() {
             if self.expanded.contains(&node_id) {
