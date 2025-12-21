@@ -39,11 +39,15 @@ in Rust.
 - Try to adhere to the DRY principle.
 - Don't overly abstract. Let's be pragmatic.
 - Let's stick to best practices and idiomatic patterns.
+- We prefer functions to be less than 50 lines and files less than 1000
+  lines, but it's not a hard limit.
+- Functions should not have more than five positional arguments, but
+  it's not a hard limit.
 
 ## Development
 
-- Issues will be in `_issues/new` in markdown files.
-- After solving an issue, move the file to `_issues/closed`.
+- Issues will be in `issues/new` in markdown files.
+- After solving an issue, move the file to `issues/closed`.
 - After solving an issue, create a git commit. In the commit message,
   focus on the "why" instead of "how". The "how" can be deduced from the
   diff. However, a short summary of the "how" can't hurt to convey
