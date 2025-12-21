@@ -68,8 +68,35 @@ impl DetailView {
         ])));
 
         // Separator
-        if !node.attributes.is_empty() {
-            items.push(ListItem::new(Line::from("")));
+        items.push(ListItem::new(Line::from("")));
+
+        // Special handling for text nodes, comment nodes, and attribute nodes
+        if node.node_type == "text" || node.node_type == "comment" {
+            // For text and comment nodes, display content directly without header or indentation
+            if let Some(content_attr) = node.attributes.iter().find(|a| a.key == "content") {
+                let value_lines =
+                    self.wrap_text(&content_attr.value, area.width as usize);
+                for line in value_lines.iter() {
+                    items.push(ListItem::new(Line::from(Span::styled(
+                        line.clone(),
+                        Style::default().fg(Color::Green),
+                    ))));
+                }
+            }
+        } else if node.is_attribute() {
+            // For attribute nodes, display value directly without header or indentation
+            if let Some(value_attr) = node.attributes.iter().find(|a| a.key == "value") {
+                let value_lines =
+                    self.wrap_text(&value_attr.value, area.width as usize);
+                for line in value_lines.iter() {
+                    items.push(ListItem::new(Line::from(Span::styled(
+                        line.clone(),
+                        Style::default().fg(Color::Green),
+                    ))));
+                }
+            }
+        } else if !node.attributes.is_empty() {
+            // For other nodes, display all attributes
             items.push(ListItem::new(Line::from(Span::styled(
                 "Attributes:",
                 Style::default()
@@ -101,7 +128,6 @@ impl DetailView {
                 }
             }
         } else {
-            items.push(ListItem::new(Line::from("")));
             items.push(ListItem::new(Line::from(Span::styled(
                 "(No attributes)",
                 Style::default()
