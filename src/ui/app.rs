@@ -1,7 +1,7 @@
 use crate::error::{Result, XtvError};
 use crate::tree::Tree;
-use crate::ui::tree_view::TreeView;
 use crate::ui::detail_view::DetailView;
+use crate::ui::tree_view::TreeView;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute,
@@ -42,8 +42,7 @@ impl App {
         execute!(stdout, EnterAlternateScreen).map_err(|e| XtvError::Tui(e.to_string()))?;
 
         let backend = CrosstermBackend::new(stdout);
-        let mut terminal =
-            Terminal::new(backend).map_err(|e| XtvError::Tui(e.to_string()))?;
+        let mut terminal = Terminal::new(backend).map_err(|e| XtvError::Tui(e.to_string()))?;
 
         // Main loop
         let result = self.main_loop(&mut terminal);
@@ -88,9 +87,12 @@ impl App {
         self.tree_view.render(frame, content_chunks[0], &self.tree);
 
         // Get the selected node and render detail view
-        let selected_node = self.tree_view.get_selected_node_id()
+        let selected_node = self
+            .tree_view
+            .get_selected_node_id()
             .and_then(|id| self.tree.get_node(id));
-        self.detail_view.render(frame, content_chunks[1], selected_node);
+        self.detail_view
+            .render(frame, content_chunks[1], selected_node);
 
         // Render status bar
         let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | q: Quit ";

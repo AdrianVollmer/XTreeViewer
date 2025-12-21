@@ -62,7 +62,14 @@ impl TreeView {
         node_id: usize,
     ) -> ListItem<'a> {
         let indent = "  ".repeat(depth);
-        let icon = if node.has_children() {
+        let icon = if node.is_virtual_attributes() {
+            // Virtual attribute nodes get hollow/solid diamond
+            if self.expanded.contains(&node_id) {
+                "◆" // Solid diamond when expanded
+            } else {
+                "◇" // Hollow diamond when collapsed
+            }
+        } else if node.has_children() {
             if self.expanded.contains(&node_id) {
                 "▼"
             } else {
@@ -73,26 +80,43 @@ impl TreeView {
         };
 
         // Create display text
-        let mut spans = vec![
-            Span::raw(indent),
-            Span::styled(icon, Style::default().fg(Color::Yellow)),
-            Span::raw(" "),
-            Span::styled(&node.label, Style::default().fg(Color::Cyan)),
-            Span::raw(" "),
-            Span::styled(
-                format!("[{}]", node.node_type),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ];
+        let mut spans = vec![Span::raw(indent)];
 
-        // Add first attribute value if available
-        if let Some(attr) = node.attributes.first() {
-            let value = if attr.value.len() > 40 {
-                format!(" = {}...", &attr.value[..40])
-            } else {
-                format!(" = {}", attr.value)
-            };
-            spans.push(Span::styled(value, Style::default().fg(Color::Green)));
+        // Icon with special color for virtual nodes
+        let icon_color = if node.is_virtual_attributes() {
+            Color::Magenta
+        } else {
+            Color::Yellow
+        };
+        spans.push(Span::styled(icon, Style::default().fg(icon_color)));
+        spans.push(Span::raw(" "));
+
+        // Label with special color for virtual nodes
+        let label_color = if node.is_virtual_attributes() {
+            Color::Magenta
+        } else {
+            Color::Cyan
+        };
+        spans.push(Span::styled(&node.label, Style::default().fg(label_color)));
+        spans.push(Span::raw(" "));
+
+        // Node type
+        spans.push(Span::styled(
+            format!("[{}]", node.node_type),
+            Style::default().fg(Color::DarkGray),
+        ));
+
+        // For attribute nodes, show the value
+        // For regular nodes, DON'T show first attribute anymore (that's what we're fixing!)
+        if node.is_attribute() {
+            if let Some(attr) = node.attributes.first() {
+                let value = if attr.value.len() > 40 {
+                    format!(" = {}...", &attr.value[..40])
+                } else {
+                    format!(" = {}", attr.value)
+                };
+                spans.push(Span::styled(value, Style::default().fg(Color::Green)));
+            }
         }
 
         ListItem::new(Line::from(spans))
@@ -171,7 +195,8 @@ impl TreeView {
     }
 
     pub fn get_selected_node_id(&self) -> Option<usize> {
-        self.list_state.selected()
+        self.list_state
+            .selected()
             .and_then(|index| self.visible_nodes.get(index))
             .map(|(node_id, _)| *node_id)
     }

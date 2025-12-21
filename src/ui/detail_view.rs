@@ -9,6 +9,12 @@ use ratatui::{
 
 pub struct DetailView;
 
+impl Default for DetailView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DetailView {
     pub fn new() -> Self {
         Self
@@ -27,19 +33,34 @@ impl DetailView {
 
         // Node label
         items.push(ListItem::new(Line::from(vec![
-            Span::styled("Label: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Label: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&node.label, Style::default().fg(Color::Cyan)),
         ])));
 
         // Node type
         items.push(ListItem::new(Line::from(vec![
-            Span::styled("Type: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Type: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&node.node_type, Style::default().fg(Color::Magenta)),
         ])));
 
         // Children count
         items.push(ListItem::new(Line::from(vec![
-            Span::styled("Children: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Children: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 format!("{}", node.children.len()),
                 Style::default().fg(Color::Green),
@@ -49,12 +70,12 @@ impl DetailView {
         // Separator
         if !node.attributes.is_empty() {
             items.push(ListItem::new(Line::from("")));
-            items.push(ListItem::new(Line::from(
-                Span::styled(
-                    "Attributes:",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                ),
-            )));
+            items.push(ListItem::new(Line::from(Span::styled(
+                "Attributes:",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            ))));
 
             // All attributes
             for (idx, attr) in node.attributes.iter().enumerate() {
@@ -65,11 +86,17 @@ impl DetailView {
                         format!("[{}] ", idx + 1),
                         Style::default().fg(Color::DarkGray),
                     ),
-                    Span::styled(attr.key.clone(), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        attr.key.clone(),
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ])));
 
                 // Attribute value (potentially multi-line)
-                let value_lines = self.wrap_text(&attr.value, (area.width as usize).saturating_sub(6));
+                let value_lines =
+                    self.wrap_text(&attr.value, (area.width as usize).saturating_sub(6));
                 for (line_idx, line) in value_lines.iter().enumerate() {
                     if line_idx == 0 {
                         items.push(ListItem::new(Line::from(vec![
@@ -87,16 +114,16 @@ impl DetailView {
             }
         } else {
             items.push(ListItem::new(Line::from("")));
-            items.push(ListItem::new(Line::from(
-                Span::styled(
-                    "(No attributes)",
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-                ),
-            )));
+            items.push(ListItem::new(Line::from(Span::styled(
+                "(No attributes)",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
+            ))));
         }
 
-        let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Node Details"));
+        let list =
+            List::new(items).block(Block::default().borders(Borders::ALL).title("Node Details"));
 
         frame.render_widget(list, area);
     }
@@ -104,16 +131,16 @@ impl DetailView {
     fn render_empty(&self, frame: &mut Frame, area: Rect) {
         let items = vec![
             ListItem::new(Line::from("")),
-            ListItem::new(Line::from(
-                Span::styled(
-                    "No node selected",
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-                ),
-            )),
+            ListItem::new(Line::from(Span::styled(
+                "No node selected",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
+            ))),
         ];
 
-        let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Node Details"));
+        let list =
+            List::new(items).block(Block::default().borders(Borders::ALL).title("Node Details"));
 
         frame.render_widget(list, area);
     }

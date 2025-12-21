@@ -56,4 +56,15 @@ impl TreeNode {
     pub fn has_children(&self) -> bool {
         !self.children.is_empty()
     }
+
+    pub const VIRTUAL_ATTRIBUTES_TYPE: &'static str = "@attributes";
+    pub const ATTRIBUTE_TYPE: &'static str = "attribute";
+
+    pub fn is_virtual_attributes(&self) -> bool {
+        self.node_type == Self::VIRTUAL_ATTRIBUTES_TYPE
+    }
+
+    pub fn is_attribute(&self) -> bool {
+        self.node_type == Self::ATTRIBUTE_TYPE
+    }
 }
