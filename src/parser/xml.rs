@@ -140,8 +140,12 @@ fn create_virtual_attributes_node(
     // Create the virtual container node
     let mut virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
 
+    // Sort attributes alphanumerically by key
+    let mut sorted_attrs = attributes.to_vec();
+    sorted_attrs.sort_by(|a, b| a.key.cmp(&b.key));
+
     // Create individual attribute nodes as children
-    for attr in attributes {
+    for attr in sorted_attrs {
         let mut attr_node = TreeNode::new(&attr.key, TreeNode::ATTRIBUTE_TYPE);
         attr_node.add_attribute("value", &attr.value);
         let attr_id = tree.add_node(attr_node);
@@ -216,15 +220,15 @@ mod tests {
         let item = tree.get_node(root.children[0]).unwrap();
         let virtual_node = tree.get_node(item.children[0]).unwrap();
 
-        // Check first attribute node
+        // Check first attribute node (alphabetically sorted: "enabled" comes before "id")
         let attr1 = tree.get_node(virtual_node.children[0]).unwrap();
         assert_eq!(attr1.node_type, "attribute");
-        assert_eq!(attr1.label, "id");
-        assert_eq!(attr1.attributes[0].value, "123");
+        assert_eq!(attr1.label, "enabled");
+        assert_eq!(attr1.attributes[0].value, "true");
 
         // Check second attribute node
         let attr2 = tree.get_node(virtual_node.children[1]).unwrap();
-        assert_eq!(attr2.label, "enabled");
-        assert_eq!(attr2.attributes[0].value, "true");
+        assert_eq!(attr2.label, "id");
+        assert_eq!(attr2.attributes[0].value, "123");
     }
 }

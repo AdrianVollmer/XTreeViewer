@@ -97,7 +97,11 @@ fn create_virtual_attributes_node(
 
     let mut virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
 
-    for attr in attributes {
+    // Sort attributes alphanumerically by key
+    let mut sorted_attrs = attributes.to_vec();
+    sorted_attrs.sort_by(|a, b| a.key.cmp(&b.key));
+
+    for attr in sorted_attrs {
         let mut attr_node = TreeNode::new(&attr.key, TreeNode::ATTRIBUTE_TYPE);
         attr_node.add_attribute("value", &attr.value);
         let attr_id = tree.add_node(attr_node);

@@ -248,10 +248,15 @@ impl<'a> LdifFileParser<'a> {
             let virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
             let virtual_id = tree.add_node(virtual_node);
 
-            // Add individual attribute nodes
-            for (key, values) in attr_map {
+            // Sort attribute keys alphanumerically
+            let mut sorted_keys: Vec<_> = attr_map.keys().collect();
+            sorted_keys.sort();
+
+            // Add individual attribute nodes in sorted order
+            for key in sorted_keys {
+                let values = &attr_map[key];
                 if values.len() == 1 {
-                    let mut attr_node = TreeNode::new(&key, TreeNode::ATTRIBUTE_TYPE);
+                    let mut attr_node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
                     attr_node.add_attribute("value", &values[0]);
                     let attr_id = tree.add_node(attr_node);
                     tree.get_node_mut(virtual_id).unwrap().add_child(attr_id);
