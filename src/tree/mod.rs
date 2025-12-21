@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_add_nodes() {
-        let mut root = TreeNode::new("root", "object");
+        let root = TreeNode::new("root", "object");
         let mut tree = Tree::new(root);
 
         let child1 = TreeNode::new("child1", "string");

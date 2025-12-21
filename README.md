@@ -5,6 +5,7 @@ A blazing fast TUI (Terminal User Interface) application for viewing tree struct
 ## Features
 
 - **Interactive TUI**: Navigate tree structures with keyboard controls
+- **Detail View**: View all attributes of selected nodes in a dedicated panel
 - **Multiple Format Support**: JSON, XML (with HTML and LDIF planned)
 - **Read-Only Viewer**: Safe exploration of data files
 - **Fast and Lightweight**: Written in Rust for performance
@@ -57,6 +58,9 @@ cargo run -- examples/sample.json
 - `src/tree/`: Abstract tree data structure
 - `src/parser/`: Format-specific parsers (JSON, XML)
 - `src/ui/`: TUI rendering and event handling
+  - `tree_view.rs`: Main tree navigation view
+  - `detail_view.rs`: Node attribute detail panel
+  - `app.rs`: Application orchestration
 - `src/cli.rs`: Command-line interface
 - `examples/`: Sample files for testing
 
@@ -64,9 +68,9 @@ cargo run -- examples/sample.json
 
 - [x] JSON parser
 - [x] XML parser
+- [x] Detail view for node attributes
 - [ ] HTML parser
 - [ ] LDIF parser
-- [ ] Detail view for node attributes
 - [ ] Search functionality
 - [ ] Lazy loading for large datasets
 - [ ] Streaming support for very large files

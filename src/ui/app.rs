@@ -1,6 +1,7 @@
 use crate::error::{Result, XtvError};
 use crate::tree::Tree;
 use crate::ui::tree_view::TreeView;
+use crate::ui::detail_view::DetailView;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute,
@@ -17,16 +18,19 @@ use std::io;
 pub struct App {
     tree: Tree,
     tree_view: TreeView,
+    detail_view: DetailView,
     should_quit: bool,
 }
 
 impl App {
     pub fn new(tree: Tree) -> Self {
         let tree_view = TreeView::new(tree.root_id());
+        let detail_view = DetailView::new();
 
         Self {
             tree,
             tree_view,
+            detail_view,
             should_quit: false,
         }
     }
@@ -69,18 +73,29 @@ impl App {
     }
 
     fn render(&mut self, frame: &mut ratatui::Frame) {
-        let chunks = Layout::default()
+        let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(0), Constraint::Length(1)])
             .split(frame.size());
 
+        // Split the main area horizontally for tree view and detail view
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(main_chunks[0]);
+
         // Render tree view
-        self.tree_view.render(frame, chunks[0], &self.tree);
+        self.tree_view.render(frame, content_chunks[0], &self.tree);
+
+        // Get the selected node and render detail view
+        let selected_node = self.tree_view.get_selected_node_id()
+            .and_then(|id| self.tree.get_node(id));
+        self.detail_view.render(frame, content_chunks[1], selected_node);
 
         // Render status bar
         let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | q: Quit ";
         let status_bar = Paragraph::new(help_text);
-        frame.render_widget(status_bar, chunks[1]);
+        frame.render_widget(status_bar, main_chunks[1]);
     }
 
     fn handle_events(&mut self) -> Result<()> {

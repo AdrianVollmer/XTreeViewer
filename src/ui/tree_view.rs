@@ -169,4 +169,10 @@ impl TreeView {
             }
         }
     }
+
+    pub fn get_selected_node_id(&self) -> Option<usize> {
+        self.list_state.selected()
+            .and_then(|index| self.visible_nodes.get(index))
+            .map(|(node_id, _)| *node_id)
+    }
 }
