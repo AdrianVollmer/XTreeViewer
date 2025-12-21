@@ -55,3 +55,11 @@ in Rust.
 - Before commiting, run linters, formatters, and the test suite.
 - When fixing bugs, add test cases.
 - When adding features, update the docs and/or README.
+
+## Agents
+
+If you are an LLM:
+
+- use
+  `git -c user.name="Claude Code" -c user.email="noreply@anthropic.com"`
+  when commiting.
