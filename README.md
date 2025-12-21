@@ -8,7 +8,7 @@ tree structures from serialized data files.
 - **Interactive TUI**: Navigate tree structures with keyboard controls
 - **Detail View**: View all attributes of selected nodes in a dedicated
   panel
-- **Multiple Format Support**: JSON, XML (with HTML and LDIF planned)
+- **Multiple Format Support**: JSON, XML, HTML (with LDIF planned)
 - **Read-Only Viewer**: Safe exploration of data files
 - **Fast and Lightweight**: Written in Rust for performance
 

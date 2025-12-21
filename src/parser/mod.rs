@@ -1,3 +1,4 @@
+pub mod html;
 pub mod json;
 pub mod xml;
 
@@ -24,6 +25,7 @@ pub fn detect_parser(file_path: &Path) -> Result<Box<dyn Parser>> {
     match extension.as_deref() {
         Some("json") => Ok(Box::new(json::JsonParser)),
         Some("xml") => Ok(Box::new(xml::XmlParser)),
+        Some("html") | Some("htm") => Ok(Box::new(html::HtmlParser)),
         Some(ext) => Err(XtvError::UnsupportedFormat(format!(
             "File extension '.{}' is not supported",
             ext

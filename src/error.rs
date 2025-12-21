@@ -12,6 +12,9 @@ pub enum XtvError {
     #[error("XML parsing error: {0}")]
     XmlParse(String),
 
+    #[error("HTML parsing error: {0}")]
+    HtmlParse(String),
+
     #[error("Unsupported file format: {0}")]
     UnsupportedFormat(String),
 
