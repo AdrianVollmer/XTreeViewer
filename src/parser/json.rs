@@ -58,25 +58,25 @@ fn convert_value(tree: &mut Tree, parent_id: usize, value: &Value, key: &str) {
             }
         }
         Value::String(s) => {
-            let mut node = TreeNode::new(key, "string");
+            let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", s.clone());
             let node_id = tree.add_node(node);
             tree.get_node_mut(parent_id).unwrap().add_child(node_id);
         }
         Value::Number(n) => {
-            let mut node = TreeNode::new(key, "number");
+            let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", n.to_string());
             let node_id = tree.add_node(node);
             tree.get_node_mut(parent_id).unwrap().add_child(node_id);
         }
         Value::Bool(b) => {
-            let mut node = TreeNode::new(key, "boolean");
+            let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", b.to_string());
             let node_id = tree.add_node(node);
             tree.get_node_mut(parent_id).unwrap().add_child(node_id);
         }
         Value::Null => {
-            let mut node = TreeNode::new(key, "null");
+            let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", "null");
             let node_id = tree.add_node(node);
             tree.get_node_mut(parent_id).unwrap().add_child(node_id);
