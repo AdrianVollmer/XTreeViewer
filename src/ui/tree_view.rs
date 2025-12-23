@@ -100,7 +100,8 @@ impl TreeView {
         spans.push(Span::styled(&node.label, Style::default().fg(label_color)));
 
         // For attribute nodes, show key: value (no type bracket)
-        // For regular nodes, show type and DON'T show first attribute anymore
+        // For text/comment nodes, show label: content
+        // For regular nodes, show type
         if node.is_attribute() {
             if let Some(attr) = node.attributes.first() {
                 let value = if attr.value.len() > 40 {
@@ -110,8 +111,18 @@ impl TreeView {
                 };
                 spans.push(Span::styled(value, Style::default().fg(Color::Green)));
             }
+        } else if node.node_type == "text" || node.node_type == "comment" {
+            // Show content inline for text and comment nodes
+            if let Some(content_attr) = node.attributes.iter().find(|a| a.key == "content") {
+                let value = if content_attr.value.len() > 40 {
+                    format!(": {}...", &content_attr.value[..40])
+                } else {
+                    format!(": {}", content_attr.value)
+                };
+                spans.push(Span::styled(value, Style::default().fg(Color::Green)));
+            }
         } else {
-            // Only show node type for non-attribute nodes
+            // Only show node type for regular nodes
             spans.push(Span::raw(" "));
             spans.push(Span::styled(
                 format!("[{}]", node.node_type),
