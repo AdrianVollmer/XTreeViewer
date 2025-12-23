@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{List, ListItem, ListState},
     Frame,
 };
 use std::collections::HashSet;
@@ -44,7 +44,6 @@ impl TreeView {
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Tree View"))
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)

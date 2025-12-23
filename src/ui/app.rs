@@ -1,6 +1,5 @@
 use crate::error::{Result, XtvError};
 use crate::tree::Tree;
-use crate::ui::detail_view::DetailView;
 use crate::ui::tree_view::TreeView;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
@@ -10,6 +9,7 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
+    style::{Color, Style},
     widgets::Paragraph,
     Terminal,
 };
@@ -18,7 +18,6 @@ use std::io;
 pub struct App {
     tree: Tree,
     tree_view: TreeView,
-    detail_view: DetailView,
     should_quit: bool,
     show_help: bool,
 }
@@ -26,12 +25,10 @@ pub struct App {
 impl App {
     pub fn new(tree: Tree) -> Self {
         let tree_view = TreeView::new(tree.root_id());
-        let detail_view = DetailView::new();
 
         Self {
             tree,
             tree_view,
-            detail_view,
             should_quit: false,
             show_help: false,
         }
@@ -76,35 +73,61 @@ impl App {
     fn render(&mut self, frame: &mut ratatui::Frame) {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .constraints([
+                Constraint::Min(0),      // Tree view
+                Constraint::Length(1),   // Path bar
+                Constraint::Length(1),   // Footer
+            ])
             .split(frame.size());
 
-        // Split the main area horizontally for tree view and detail view
-        let content_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(main_chunks[0]);
+        // Render tree view (full width, no border)
+        self.tree_view.render(frame, main_chunks[0], &self.tree);
 
-        // Render tree view
-        self.tree_view.render(frame, content_chunks[0], &self.tree);
+        // Render path bar
+        let path = self.get_node_path();
+        let path_bar = Paragraph::new(path)
+            .style(Style::default().fg(Color::Gray));
+        frame.render_widget(path_bar, main_chunks[1]);
 
-        // Get the selected node and render detail view
-        let selected_node = self
-            .tree_view
-            .get_selected_node_id()
-            .and_then(|id| self.tree.get_node(id));
-        self.detail_view
-            .render(frame, content_chunks[1], selected_node);
-
-        // Render status bar
+        // Render footer
         let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | c: Collapse Parent | q: Quit | ?: Help ";
         let status_bar = Paragraph::new(help_text);
-        frame.render_widget(status_bar, main_chunks[1]);
+        frame.render_widget(status_bar, main_chunks[2]);
 
         // Render help popup if shown
         if self.show_help {
             self.render_help_popup(frame);
         }
+    }
+
+    fn get_node_path(&self) -> String {
+        let selected_id = match self.tree_view.get_selected_node_id() {
+            Some(id) => id,
+            None => return String::new(),
+        };
+
+        // Build path from root to selected node
+        let mut path_parts = Vec::new();
+        let mut current_id = selected_id;
+
+        // Walk up the tree to build the path
+        loop {
+            if let Some(node) = self.tree.get_node(current_id) {
+                path_parts.push(node.label.clone());
+            }
+
+            // Find parent
+            match self.tree.get_parent(current_id) {
+                Some(parent_id) => current_id = parent_id,
+                None => break,
+            }
+        }
+
+        // Reverse to get root-to-leaf order
+        path_parts.reverse();
+
+        // Join with " > " separator
+        format!(" {}", path_parts.join(" > "))
     }
 
     fn handle_events(&mut self) -> Result<()> {
