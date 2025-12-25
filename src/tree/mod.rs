@@ -2,7 +2,7 @@ pub mod node;
 pub mod streaming;
 
 pub use node::{Attribute, TreeNode};
-pub use streaming::StreamingTree;
+pub use streaming::{NodeType, StreamingTree};
 
 /// Tree structure that stores nodes in a Vec for efficient access
 #[derive(Debug)]

@@ -5,23 +5,35 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
+/// Type of node in the index
+#[derive(Debug, Clone, PartialEq)]
+pub enum NodeType {
+    Root,
+    Entry { dn: String, rdn: String },
+    VirtualAttributes,
+    Attribute { key: String, value: String },
+}
+
 /// Entry in the LDIF index
 #[derive(Debug, Clone)]
 pub struct IndexEntry {
-    /// Byte offset in the file where this node starts
+    /// Byte offset in the file where this LDIF entry starts (only for Entry nodes)
     pub offset: u64,
     /// Parent node ID (None for root)
     pub parent_id: Option<usize>,
     /// Child node IDs
     pub children: Vec<usize>,
+    /// Type of this node
+    pub node_type: NodeType,
 }
 
 impl IndexEntry {
-    pub fn new(offset: u64, parent_id: Option<usize>) -> Self {
+    pub fn new(offset: u64, parent_id: Option<usize>, node_type: NodeType) -> Self {
         Self {
             offset,
             parent_id,
             children: Vec::new(),
+            node_type,
         }
     }
 }
@@ -184,54 +196,25 @@ impl StreamingTree {
     }
 
     /// Parse a TreeNode from the lines read from disk
-    fn parse_node_from_lines(&self, id: usize, lines: Vec<String>) -> Option<TreeNode> {
-        if lines.is_empty() {
-            return None;
-        }
-
-        // For root node
-        if id == self.index.root_id() {
-            return Some(TreeNode::new("root", "root"));
-        }
-
-        // First line should be DN
-        let first_line = &lines[0];
-        if !first_line.starts_with("dn:") {
-            return None;
-        }
-
-        let dn = first_line[3..].trim();
-
-        // Determine if this is an entry node or virtual attributes node or attribute node
-        // Based on the index structure, we can infer the node type
-        // For now, we'll create a basic node with the DN as label
-
-        // Check if this is a virtual @attributes node (these would be stored differently)
-        // For simplicity, we'll handle this in the streaming parser when building the index
-
-        // Create entry node
+    fn parse_node_from_lines(&self, id: usize, _lines: Vec<String>) -> Option<TreeNode> {
         let entry = self.index.get_entry(id)?;
 
-        // Compute label from DN
-        let label = self.compute_label_from_dn(dn, entry.parent_id);
-
-        let mut node = TreeNode::new(label, "entry");
+        let mut node = match &entry.node_type {
+            NodeType::Root => TreeNode::new("root", "root"),
+            NodeType::Entry { rdn, .. } => TreeNode::new(rdn, "entry"),
+            NodeType::VirtualAttributes => {
+                TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE)
+            }
+            NodeType::Attribute { key, value } => {
+                let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
+                node.add_attribute("value", value);
+                node
+            }
+        };
 
         // Add children references from index
         node.children = entry.children.clone();
 
         Some(node)
-    }
-
-    /// Compute label from DN and parent
-    fn compute_label_from_dn(&self, dn: &str, parent_id: Option<usize>) -> String {
-        // If no parent, use full DN
-        if parent_id.is_none() || parent_id == Some(self.index.root_id()) {
-            return dn.to_string();
-        }
-
-        // Otherwise, try to compute RDN
-        // This is simplified - in a full implementation we'd get parent DN and compute relative
-        dn.to_string()
     }
 }
