@@ -12,8 +12,25 @@ impl Parser for JsonParser {
         let mut tree = Tree::new(TreeNode::new("root", "root"));
         let root_id = tree.root_id();
 
-        // Build tree from JSON value
-        convert_value(&mut tree, root_id, &value, "root");
+        // Build tree from JSON value - handle top level specially
+        match &value {
+            Value::Object(map) => {
+                // Add object fields directly to root
+                for (key, child_value) in map {
+                    convert_value(&mut tree, root_id, child_value, key);
+                }
+            }
+            Value::Array(arr) => {
+                // Add array items directly to root
+                for (index, item) in arr.iter().enumerate() {
+                    convert_value(&mut tree, root_id, item, &format!("[{}]", index));
+                }
+            }
+            _ => {
+                // For scalar values at top level, add them as a child
+                convert_value(&mut tree, root_id, &value, "value");
+            }
+        }
 
         Ok(tree)
     }

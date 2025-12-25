@@ -12,8 +12,32 @@ impl Parser for YamlParser {
         let mut tree = Tree::new(TreeNode::new("root", "root"));
         let root_id = tree.root_id();
 
-        // Build tree from YAML value
-        convert_value(&mut tree, root_id, &value, "root");
+        // Build tree from YAML value - handle top level specially
+        match &value {
+            Value::Mapping(map) => {
+                // Add mapping fields directly to root
+                for (key, child_value) in map {
+                    let key_str = match key {
+                        Value::String(s) => s.clone(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Null => "null".to_string(),
+                        _ => format!("{:?}", key),
+                    };
+                    convert_value(&mut tree, root_id, child_value, &key_str);
+                }
+            }
+            Value::Sequence(arr) => {
+                // Add sequence items directly to root
+                for (index, item) in arr.iter().enumerate() {
+                    convert_value(&mut tree, root_id, item, &format!("[{}]", index));
+                }
+            }
+            _ => {
+                // For scalar values at top level, add them as a child
+                convert_value(&mut tree, root_id, &value, "value");
+            }
+        }
 
         Ok(tree)
     }
@@ -176,8 +200,8 @@ null_value: null
         let parser = YamlParser;
         let tree = parser.parse(yaml).unwrap();
 
-        // Should have root + mapping + 6 attribute nodes
-        assert!(tree.node_count() >= 8);
+        // Should have root + 6 attribute nodes
+        assert!(tree.node_count() >= 7);
     }
 
     #[test]
