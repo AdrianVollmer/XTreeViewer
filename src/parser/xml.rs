@@ -44,13 +44,7 @@ impl Parser for XmlParser {
                     };
 
                     // Create virtual attributes node if there are attributes
-                    if let Some(virtual_id) = create_virtual_attributes_node(&mut tree, &attributes)
-                    {
-                        tree.get_node_mut(node_id)
-                            .unwrap()
-                            .children
-                            .insert(0, virtual_id);
-                    }
+                    add_virtual_attributes_if_present(&mut tree, node_id, &attributes);
 
                     // Push this node as the new parent
                     parent_stack.push(node_id);
@@ -101,13 +95,7 @@ impl Parser for XmlParser {
                     };
 
                     // Create virtual attributes node if there are attributes
-                    if let Some(virtual_id) = create_virtual_attributes_node(&mut tree, &attributes)
-                    {
-                        tree.get_node_mut(node_id)
-                            .unwrap()
-                            .children
-                            .insert(0, virtual_id);
-                    }
+                    add_virtual_attributes_if_present(&mut tree, node_id, &attributes);
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => return Err(XtvError::XmlParse(e.to_string())),
@@ -157,6 +145,21 @@ fn create_virtual_attributes_node(
     }
 
     Some(virtual_id)
+}
+
+/// Add virtual attributes node to an element node if it has attributes
+/// Inserts the virtual node as the first child (index 0)
+fn add_virtual_attributes_if_present(
+    tree: &mut Tree,
+    node_id: usize,
+    attributes: &[crate::tree::node::Attribute],
+) {
+    if let Some(virtual_id) = create_virtual_attributes_node(tree, attributes) {
+        tree.get_node_mut(node_id)
+            .unwrap()
+            .children
+            .insert(0, virtual_id);
+    }
 }
 
 #[cfg(test)]

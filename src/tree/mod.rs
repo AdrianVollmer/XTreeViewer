@@ -80,9 +80,21 @@ pub enum TreeVariant {
     Streaming(StreamingTree),
 }
 
+/// Macro to dispatch method calls to the appropriate tree variant
+/// This eliminates repetitive match boilerplate while maintaining type safety
+macro_rules! dispatch {
+    ($self:expr, $method:ident $(, $arg:expr)*) => {
+        match $self {
+            TreeVariant::InMemory(tree) => tree.$method($($arg),*),
+            TreeVariant::Streaming(tree) => tree.$method($($arg),*),
+        }
+    };
+}
+
 impl TreeVariant {
     /// Get a reference to a node by ID
     pub fn get_node(&self, id: usize) -> Option<TreeNode> {
+        // Special case: InMemory returns &TreeNode (needs clone), Streaming returns TreeNode
         match self {
             TreeVariant::InMemory(tree) => tree.get_node(id).cloned(),
             TreeVariant::Streaming(tree) => tree.get_node(id),
@@ -91,34 +103,22 @@ impl TreeVariant {
 
     /// Get the root node ID
     pub fn root_id(&self) -> usize {
-        match self {
-            TreeVariant::InMemory(tree) => tree.root_id(),
-            TreeVariant::Streaming(tree) => tree.root_id(),
-        }
+        dispatch!(self, root_id)
     }
 
     /// Get the children IDs of a node
     pub fn get_children(&self, id: usize) -> Vec<usize> {
-        match self {
-            TreeVariant::InMemory(tree) => tree.get_children(id),
-            TreeVariant::Streaming(tree) => tree.get_children(id),
-        }
+        dispatch!(self, get_children, id)
     }
 
     /// Get the total number of nodes in the tree
     pub fn node_count(&self) -> usize {
-        match self {
-            TreeVariant::InMemory(tree) => tree.node_count(),
-            TreeVariant::Streaming(tree) => tree.node_count(),
-        }
+        dispatch!(self, node_count)
     }
 
     /// Find the parent of a given node by ID
     pub fn get_parent(&self, child_id: usize) -> Option<usize> {
-        match self {
-            TreeVariant::InMemory(tree) => tree.get_parent(child_id),
-            TreeVariant::Streaming(tree) => tree.get_parent(child_id),
-        }
+        dispatch!(self, get_parent, child_id)
     }
 }
 

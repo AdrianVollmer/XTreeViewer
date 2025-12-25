@@ -134,7 +134,7 @@ impl<'a> LdifFileParser<'a> {
 
             // Parse attribute line
             if logical_line.contains(':') {
-                let (key, value) = self.parse_attribute_line(&logical_line)?;
+                let (key, value) = parse_attribute_line(&logical_line)?;
                 attributes.push((key, value));
             }
         }
@@ -166,57 +166,6 @@ impl<'a> LdifFileParser<'a> {
         }
 
         result
-    }
-
-    fn parse_attribute_line(&self, line: &str) -> Result<(String, String)> {
-        // Handle three separators: :, ::, :<
-        if let Some(pos) = line.find("::") {
-            // Base64 encoded
-            let key = line[..pos].trim();
-            let encoded = line[pos + 2..].trim();
-            let decoded = self.decode_base64(encoded)?;
-            Ok((key.to_string(), decoded))
-        } else if let Some(pos) = line.find(":<") {
-            // URL reference
-            let key = line[..pos].trim();
-            let url = line[pos + 2..].trim();
-            Ok((key.to_string(), format!("<URL reference: {}>", url)))
-        } else if let Some(pos) = line.find(':') {
-            // Plain value
-            let key = line[..pos].trim();
-            let value = line[pos + 1..].trim();
-            Ok((key.to_string(), value.to_string()))
-        } else {
-            Err(XtvError::LdifParse {
-                line: self.line_num,
-                message: "Invalid attribute format".to_string(),
-            })
-        }
-    }
-
-    fn decode_base64(&self, encoded: &str) -> Result<String> {
-        use base64::{Engine as _, engine::general_purpose};
-
-        match general_purpose::STANDARD.decode(encoded) {
-            Ok(bytes) => {
-                // Try to convert to UTF-8 string
-                match String::from_utf8(bytes.clone()) {
-                    Ok(s) => Ok(s),
-                    Err(_) => {
-                        // Binary data - show hex preview or size
-                        if bytes.len() <= 64 {
-                            Ok(format!("<binary: {}>", hex_preview(&bytes)))
-                        } else {
-                            Ok(format!("<binary data, {} bytes>", bytes.len()))
-                        }
-                    }
-                }
-            }
-            Err(e) => Err(XtvError::LdifParse {
-                line: self.line_num,
-                message: format!("Base64 decode error: {}", e),
-            }),
-        }
     }
 
     fn build_tree(&mut self, entries: Vec<LdifEntry>) -> Tree {

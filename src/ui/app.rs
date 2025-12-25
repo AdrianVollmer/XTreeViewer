@@ -380,12 +380,12 @@ impl App {
             KeyCode::Char('C') => {
                 self.tree_view.collapse_all_siblings_deep(&self.tree);
             }
-            KeyCode::PageUp => {
+            KeyCode::PageUp | KeyCode::Char('[') => {
                 for _ in 0..10 {
                     self.tree_view.navigate_up();
                 }
             }
-            KeyCode::PageDown => {
+            KeyCode::PageDown | KeyCode::Char(']') => {
                 for _ in 0..10 {
                     self.tree_view.navigate_down(&self.tree);
                 }
@@ -397,16 +397,6 @@ impl App {
             KeyCode::Char('p') => {
                 self.last_key_was_p = true;
                 return Ok(());
-            }
-            KeyCode::Char('[') => {
-                for _ in 0..10 {
-                    self.tree_view.navigate_up();
-                }
-            }
-            KeyCode::Char(']') => {
-                for _ in 0..10 {
-                    self.tree_view.navigate_down(&self.tree);
-                }
             }
             KeyCode::Char('/') => {
                 self.search_mode = true;
