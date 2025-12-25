@@ -28,6 +28,8 @@ pub struct App {
     search_matches: Vec<usize>,
     current_match_index: Option<usize>,
     case_sensitive: bool,
+    cached_path: String,
+    last_selected_id: Option<usize>,
 }
 
 impl App {
@@ -47,6 +49,8 @@ impl App {
             search_matches: Vec::new(),
             current_match_index: None,
             case_sensitive: false,
+            cached_path: String::new(),
+            last_selected_id: None,
         }
     }
 
@@ -105,9 +109,16 @@ impl App {
             self.current_match_index,
         );
 
-        // Render path bar
-        let path = self.get_node_path();
-        let path_bar = Paragraph::new(path).style(Style::default().fg(Color::Gray));
+        // Update path cache only if selection changed
+        let current_selected_id = self.tree_view.get_selected_node_id();
+        if current_selected_id != self.last_selected_id {
+            self.cached_path = self.compute_node_path();
+            self.last_selected_id = current_selected_id;
+        }
+
+        // Render path bar using cached path
+        let path_bar =
+            Paragraph::new(self.cached_path.as_str()).style(Style::default().fg(Color::Gray));
         frame.render_widget(path_bar, main_chunks[1]);
 
         // Render footer or search bar
@@ -150,7 +161,7 @@ impl App {
         }
     }
 
-    fn get_node_path(&self) -> String {
+    fn compute_node_path(&self) -> String {
         let selected_id = match self.tree_view.get_selected_node_id() {
             Some(id) => id,
             None => return String::new(),
