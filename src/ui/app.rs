@@ -23,6 +23,11 @@ pub struct App {
     last_key_was_y: bool,
     last_key_was_p: bool,
     print_content: Option<String>,
+    search_mode: bool,
+    search_query: String,
+    search_matches: Vec<usize>,
+    current_match_index: Option<usize>,
+    case_sensitive: bool,
 }
 
 impl App {
@@ -37,6 +42,11 @@ impl App {
             last_key_was_y: false,
             last_key_was_p: false,
             print_content: None,
+            search_mode: false,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            current_match_index: None,
+            case_sensitive: false,
         }
     }
 
@@ -87,17 +97,36 @@ impl App {
             .split(frame.size());
 
         // Render tree view (full width, no border)
-        self.tree_view.render(frame, main_chunks[0], &self.tree);
+        self.tree_view.render(frame, main_chunks[0], &self.tree, &self.search_matches, self.current_match_index);
 
         // Render path bar
         let path = self.get_node_path();
         let path_bar = Paragraph::new(path).style(Style::default().fg(Color::Gray));
         frame.render_widget(path_bar, main_chunks[1]);
 
-        // Render footer
-        let help_text = " ↑/↓/j/k: Move | h/l: Smart nav | Space: Toggle | J/K: Siblings | g/G: First/Last | ?: Help | q: Quit ";
-        let status_bar = Paragraph::new(help_text);
-        frame.render_widget(status_bar, main_chunks[2]);
+        // Render footer or search bar
+        if self.search_mode {
+            let search_text = format!("Search: {}", self.search_query);
+            let search_bar = Paragraph::new(search_text);
+            frame.render_widget(search_bar, main_chunks[2]);
+        } else if !self.search_matches.is_empty() {
+            let match_info = if let Some(idx) = self.current_match_index {
+                format!(
+                    " Search: {} ({}/{}) | n: Next | N: Previous | /: New search | Esc: Clear ",
+                    self.search_query,
+                    idx + 1,
+                    self.search_matches.len()
+                )
+            } else {
+                format!(" Search: {} (0/{}) ", self.search_query, self.search_matches.len())
+            };
+            let status_bar = Paragraph::new(match_info);
+            frame.render_widget(status_bar, main_chunks[2]);
+        } else {
+            let help_text = " ↑/↓/j/k: Move | h/l: Smart nav | Space: Toggle | /: Search | ?: Help | q: Quit ";
+            let status_bar = Paragraph::new(help_text);
+            frame.render_widget(status_bar, main_chunks[2]);
+        }
 
         // Render help popup if shown
         if self.show_help {
@@ -163,6 +192,33 @@ impl App {
             match key.code {
                 KeyCode::Char('?') | KeyCode::Esc => {
                     self.show_help = false;
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
+        // If search mode is active, handle search input
+        if self.search_mode {
+            match key.code {
+                KeyCode::Esc => {
+                    // Exit search mode
+                    self.search_mode = false;
+                    self.search_query.clear();
+                    self.search_matches.clear();
+                    self.current_match_index = None;
+                }
+                KeyCode::Enter => {
+                    // Exit search mode but keep search active
+                    self.search_mode = false;
+                }
+                KeyCode::Backspace => {
+                    self.search_query.pop();
+                    self.perform_search();
+                }
+                KeyCode::Char(c) => {
+                    self.search_query.push(c);
+                    self.perform_search();
                 }
                 _ => {}
             }
@@ -238,7 +294,14 @@ impl App {
                 self.show_help = true;
             }
             KeyCode::Esc => {
-                self.should_quit = true;
+                // Clear search if active, otherwise quit
+                if !self.search_matches.is_empty() {
+                    self.search_query.clear();
+                    self.search_matches.clear();
+                    self.current_match_index = None;
+                } else {
+                    self.should_quit = true;
+                }
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.tree_view.navigate_up();
@@ -318,6 +381,18 @@ impl App {
                 for _ in 0..10 {
                     self.tree_view.navigate_down(&self.tree);
                 }
+            }
+            KeyCode::Char('/') => {
+                self.search_mode = true;
+                self.search_query.clear();
+                self.search_matches.clear();
+                self.current_match_index = None;
+            }
+            KeyCode::Char('n') => {
+                self.next_match();
+            }
+            KeyCode::Char('N') => {
+                self.previous_match();
             }
             _ => {}
         }
@@ -412,6 +487,127 @@ impl App {
         Ok(())
     }
 
+    // Perform search and update matches
+    fn perform_search(&mut self) {
+        self.search_matches.clear();
+        self.current_match_index = None;
+
+        if self.search_query.is_empty() {
+            return;
+        }
+
+        // Get all visible nodes from tree_view
+        let all_nodes = self.collect_all_nodes(self.tree.root_id());
+
+        let query = if self.case_sensitive {
+            self.search_query.clone()
+        } else {
+            self.search_query.to_lowercase()
+        };
+
+        for node_id in all_nodes {
+            if let Some(node) = self.tree.get_node(node_id) {
+                let matches = if self.case_sensitive {
+                    node.label.contains(&query)
+                        || node.node_type.contains(&query)
+                        || node.attributes.iter().any(|attr| {
+                            attr.key.contains(&query) || attr.value.contains(&query)
+                        })
+                } else {
+                    node.label.to_lowercase().contains(&query)
+                        || node.node_type.to_lowercase().contains(&query)
+                        || node.attributes.iter().any(|attr| {
+                            attr.key.to_lowercase().contains(&query)
+                                || attr.value.to_lowercase().contains(&query)
+                        })
+                };
+
+                if matches {
+                    self.search_matches.push(node_id);
+                }
+            }
+        }
+
+        // Set current match to first result if any
+        if !self.search_matches.is_empty() {
+            self.current_match_index = Some(0);
+            self.jump_to_current_match();
+        }
+    }
+
+    // Collect all node IDs in the tree
+    fn collect_all_nodes(&self, node_id: usize) -> Vec<usize> {
+        let mut nodes = vec![node_id];
+        let children = self.tree.get_children(node_id);
+        for child_id in children {
+            nodes.extend(self.collect_all_nodes(child_id));
+        }
+        nodes
+    }
+
+    // Jump to the current search match
+    fn jump_to_current_match(&mut self) {
+        if let Some(index) = self.current_match_index {
+            if let Some(&node_id) = self.search_matches.get(index) {
+                // Expand all parents of the matched node
+                self.expand_to_node(node_id);
+                // Navigate to the matched node
+                self.tree_view.navigate_to_node(&self.tree, node_id);
+            }
+        }
+    }
+
+    // Expand all parent nodes to make a node visible
+    fn expand_to_node(&mut self, node_id: usize) {
+        let mut path = Vec::new();
+        let mut current = node_id;
+
+        // Build path from node to root
+        while let Some(parent_id) = self.tree.get_parent(current) {
+            path.push(parent_id);
+            current = parent_id;
+        }
+
+        // Expand all nodes in the path
+        for &id in &path {
+            self.tree_view.expand_node(id);
+        }
+    }
+
+    // Navigate to next search match
+    fn next_match(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+
+        if let Some(index) = self.current_match_index {
+            self.current_match_index = Some((index + 1) % self.search_matches.len());
+        } else {
+            self.current_match_index = Some(0);
+        }
+
+        self.jump_to_current_match();
+    }
+
+    // Navigate to previous search match
+    fn previous_match(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+
+        if let Some(index) = self.current_match_index {
+            self.current_match_index = if index == 0 {
+                Some(self.search_matches.len() - 1)
+            } else {
+                Some(index - 1)
+            };
+        } else {
+            self.current_match_index = Some(0);
+        }
+
+        self.jump_to_current_match();
+    }
+
     fn render_help_popup(&self, frame: &mut ratatui::Frame) {
         use ratatui::{
             layout::Alignment,
@@ -423,7 +619,7 @@ impl App {
         // Create centered popup area
         let area = frame.size();
         let popup_width = 80.min(area.width - 4);
-        let popup_height = 25.min(area.height - 4);
+        let popup_height = 30.min(area.height - 4);
         let popup_x = (area.width - popup_width) / 2;
         let popup_y = (area.height - popup_height) / 2;
 
@@ -478,13 +674,24 @@ impl App {
             Line::from("  yk        Copy key/label       pk        Print key/label"),
             Line::from(""),
             Line::from(vec![Span::styled(
+                "Search",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  /         Start search (case-insensitive)"),
+            Line::from("  n         Jump to next match"),
+            Line::from("  N         Jump to previous match"),
+            Line::from("  Esc       Clear search / Quit"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
                 "Other",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from("  ?         Toggle this help"),
-            Line::from("  q/Esc     Quit"),
+            Line::from("  q         Quit"),
         ];
 
         let help_paragraph = Paragraph::new(help_lines)

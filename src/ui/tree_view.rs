@@ -29,9 +29,12 @@ impl TreeView {
         view
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, tree: &TreeVariant) {
+    pub fn render(&mut self, frame: &mut Frame, area: Rect, tree: &TreeVariant, search_matches: &[usize], current_match_index: Option<usize>) {
         // Rebuild visible nodes list
         self.rebuild_visible_nodes(tree);
+
+        // Get current match node ID if any
+        let current_match_id = current_match_index.and_then(|idx| search_matches.get(idx).copied());
 
         // Create list items - collect the visible nodes data first to avoid borrow issues
         let visible_nodes_copy = self.visible_nodes.clone();
@@ -39,7 +42,9 @@ impl TreeView {
             .iter()
             .map(|(node_id, depth)| {
                 let node = tree.get_node(*node_id).unwrap();
-                self.create_list_item(node, *depth, *node_id)
+                let is_match = search_matches.contains(node_id);
+                let is_current_match = Some(*node_id) == current_match_id;
+                self.create_list_item(node, *depth, *node_id, is_match, is_current_match)
             })
             .collect();
 
@@ -59,6 +64,8 @@ impl TreeView {
         node: crate::tree::TreeNode,
         depth: usize,
         node_id: usize,
+        is_match: bool,
+        is_current_match: bool,
     ) -> ListItem<'static> {
         let indent = "  ".repeat(depth);
         let icon = if node.is_virtual_attributes() {
@@ -90,15 +97,21 @@ impl TreeView {
         spans.push(Span::styled(icon, Style::default().fg(icon_color)));
         spans.push(Span::raw(" "));
 
-        // Label with special color for virtual nodes
-        let label_color = if node.is_virtual_attributes() {
-            Color::Magenta
+        // Label with highlighting for search matches
+        let label_style = if is_current_match {
+            // Current match: bright yellow background
+            Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else if is_match {
+            // Other matches: dimmer highlight
+            Style::default().fg(Color::Black).bg(Color::LightYellow)
+        } else if node.is_virtual_attributes() {
+            Style::default().fg(Color::Magenta)
         } else {
-            Color::Cyan
+            Style::default().fg(Color::Cyan)
         };
         spans.push(Span::styled(
             node.label.clone(),
-            Style::default().fg(label_color),
+            label_style,
         ));
 
         // For attribute nodes, show key: value (no type bracket)
@@ -491,4 +504,21 @@ impl TreeView {
         }
     }
 
+    // Navigate to a specific node by ID
+    pub fn navigate_to_node(&mut self, tree: &TreeVariant, node_id: usize) {
+        self.rebuild_visible_nodes(tree);
+        if let Some(index) = self.visible_nodes.iter().position(|(id, _)| *id == node_id) {
+            self.list_state.select(Some(index));
+        }
+    }
+
+    // Expand a specific node by ID
+    pub fn expand_node(&mut self, node_id: usize) {
+        self.expanded.insert(node_id);
+    }
+
+    // Get the set of search match node IDs for highlighting
+    pub fn get_highlighted_nodes(&self) -> &HashSet<usize> {
+        &self.expanded // Temporary - will be replaced with actual highlight set
+    }
 }
