@@ -226,111 +226,143 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
-        // If print popup is shown, any key closes it
+        // Handle modal states first
         if self.print_content.is_some() {
-            self.print_content = None;
-            return Ok(());
+            return self.handle_print_popup_key();
         }
 
-        // If help is shown, handle help-specific keys
         if self.show_help {
-            match key.code {
-                KeyCode::Char('?') | KeyCode::Esc => {
-                    self.show_help = false;
-                }
-                _ => {}
-            }
-            return Ok(());
+            return self.handle_help_key(key);
         }
 
-        // If search mode is active, handle search input
         if self.search_mode {
-            match key.code {
-                KeyCode::Esc => {
-                    // Exit search mode
-                    self.search_mode = false;
-                    self.search_query.clear();
-                    self.search_matches.clear();
-                    self.current_match_index = None;
-                }
-                KeyCode::Enter => {
-                    // Exit search mode but keep search active
-                    self.search_mode = false;
-                }
-                KeyCode::Backspace => {
-                    self.search_query.pop();
-                    self.perform_search();
-                }
-                KeyCode::Char(c) => {
-                    self.search_query.push(c);
-                    self.perform_search();
-                }
-                _ => {}
-            }
-            return Ok(());
+            return self.handle_search_input_key(key);
         }
 
-        // Handle 'y' prefix commands (yank/copy)
+        // Handle prefix keys
         if self.last_key_was_y {
-            self.last_key_was_y = false;
-            match key.code {
-                KeyCode::Char('y') => {
-                    if let Some(text) = self.get_node_value_pretty() {
-                        let _ = self.copy_to_clipboard(&text);
-                    }
-                    return Ok(());
-                }
-                KeyCode::Char('v') => {
-                    if let Some(text) = self.get_node_value_compact() {
-                        let _ = self.copy_to_clipboard(&text);
-                    }
-                    return Ok(());
-                }
-                KeyCode::Char('s') => {
-                    if let Some(text) = self.get_node_string_value() {
-                        let _ = self.copy_to_clipboard(&text);
-                    }
-                    return Ok(());
-                }
-                KeyCode::Char('k') => {
-                    if let Some(text) = self.get_node_key() {
-                        let _ = self.copy_to_clipboard(&text);
-                    }
-                    return Ok(());
-                }
-                _ => {
-                    // Fall through to normal handling
-                }
-            }
+            return self.handle_yank_command(key);
         }
 
-        // Handle 'p' prefix commands (print)
         if self.last_key_was_p {
-            self.last_key_was_p = false;
-            match key.code {
-                KeyCode::Char('p') => {
-                    self.print_content = self.get_node_value_pretty();
-                    return Ok(());
-                }
-                KeyCode::Char('v') => {
-                    self.print_content = self.get_node_value_compact();
-                    return Ok(());
-                }
-                KeyCode::Char('s') => {
-                    self.print_content = self.get_node_string_value();
-                    return Ok(());
-                }
-                KeyCode::Char('k') => {
-                    self.print_content = self.get_node_key();
-                    return Ok(());
-                }
-                _ => {
-                    // Fall through to normal handling
-                }
-            }
+            return self.handle_print_command(key);
         }
 
-        // Normal key handling
+        // Handle normal navigation/command keys
+        self.handle_normal_key(key)
+    }
+
+    /// Handle key press when print popup is visible
+    /// Any key closes the popup
+    fn handle_print_popup_key(&mut self) -> Result<()> {
+        self.print_content = None;
+        Ok(())
+    }
+
+    /// Handle key press when help screen is visible
+    fn handle_help_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Char('?') | KeyCode::Esc => {
+                self.show_help = false;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handle key press during search input mode
+    fn handle_search_input_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc => {
+                // Exit search mode
+                self.search_mode = false;
+                self.search_query.clear();
+                self.search_matches.clear();
+                self.current_match_index = None;
+            }
+            KeyCode::Enter => {
+                // Exit search mode but keep search active
+                self.search_mode = false;
+            }
+            KeyCode::Backspace => {
+                self.search_query.pop();
+                self.perform_search();
+            }
+            KeyCode::Char(c) => {
+                self.search_query.push(c);
+                self.perform_search();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handle 'y' prefix commands (yank/copy to clipboard)
+    fn handle_yank_command(&mut self, key: KeyEvent) -> Result<()> {
+        self.last_key_was_y = false;
+        match key.code {
+            KeyCode::Char('y') => {
+                if let Some(text) = self.get_node_value_pretty() {
+                    let _ = self.copy_to_clipboard(&text);
+                }
+                return Ok(());
+            }
+            KeyCode::Char('v') => {
+                if let Some(text) = self.get_node_value_compact() {
+                    let _ = self.copy_to_clipboard(&text);
+                }
+                return Ok(());
+            }
+            KeyCode::Char('s') => {
+                if let Some(text) = self.get_node_string_value() {
+                    let _ = self.copy_to_clipboard(&text);
+                }
+                return Ok(());
+            }
+            KeyCode::Char('k') => {
+                if let Some(text) = self.get_node_key() {
+                    let _ = self.copy_to_clipboard(&text);
+                }
+                return Ok(());
+            }
+            _ => {
+                // Fall through to normal handling
+            }
+        }
+        // If we didn't handle it, process as normal key
+        self.handle_normal_key(key)
+    }
+
+    /// Handle 'p' prefix commands (print to popup)
+    fn handle_print_command(&mut self, key: KeyEvent) -> Result<()> {
+        self.last_key_was_p = false;
+        match key.code {
+            KeyCode::Char('p') => {
+                self.print_content = self.get_node_value_pretty();
+                return Ok(());
+            }
+            KeyCode::Char('v') => {
+                self.print_content = self.get_node_value_compact();
+                return Ok(());
+            }
+            KeyCode::Char('s') => {
+                self.print_content = self.get_node_string_value();
+                return Ok(());
+            }
+            KeyCode::Char('k') => {
+                self.print_content = self.get_node_key();
+                return Ok(());
+            }
+            _ => {
+                // Fall through to normal handling
+            }
+        }
+        // If we didn't handle it, process as normal key
+        self.handle_normal_key(key)
+    }
+
+    /// Handle normal navigation and command keys
+    fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Char('q') => {
                 self.should_quit = true;
@@ -432,7 +464,7 @@ impl App {
             _ => {}
         }
 
-        // Reset all prefix flags if we didn't handle them
+        // Reset all prefix flags
         self.last_key_was_y = false;
         self.last_key_was_p = false;
 
