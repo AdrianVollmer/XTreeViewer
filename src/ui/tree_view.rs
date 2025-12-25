@@ -29,7 +29,14 @@ impl TreeView {
         view
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, tree: &TreeVariant, search_matches: &[usize], current_match_index: Option<usize>) {
+    pub fn render(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        tree: &TreeVariant,
+        search_matches: &[usize],
+        current_match_index: Option<usize>,
+    ) {
         // Rebuild visible nodes list
         self.rebuild_visible_nodes(tree);
 
@@ -100,7 +107,10 @@ impl TreeView {
         // Label with highlighting for search matches
         let label_style = if is_current_match {
             // Current match: bright yellow background
-            Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else if is_match {
             // Other matches: dimmer highlight
             Style::default().fg(Color::Black).bg(Color::LightYellow)
@@ -109,10 +119,7 @@ impl TreeView {
         } else {
             Style::default().fg(Color::Cyan)
         };
-        spans.push(Span::styled(
-            node.label.clone(),
-            label_style,
-        ));
+        spans.push(Span::styled(node.label.clone(), label_style));
 
         // For attribute nodes, show key: value (no type bracket)
         // For text/comment nodes, show label: content

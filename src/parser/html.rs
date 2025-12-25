@@ -46,7 +46,7 @@ fn traverse_node(tree: &mut Tree, parent_id: usize, node: NodeRef<Node>) {
 
             // Clone attributes and add node to tree
             let attributes = elem_node.attributes.clone();
-            let elem_id = tree.add_node(elem_node);
+            let elem_id = tree.add_child_node(parent_id, elem_node);
 
             // Create virtual attributes node if there are attributes
             if let Some(virtual_id) = create_virtual_attributes_node(tree, &attributes) {
@@ -57,7 +57,6 @@ fn traverse_node(tree: &mut Tree, parent_id: usize, node: NodeRef<Node>) {
             }
 
             // Add element as child to parent
-            tree.get_node_mut(parent_id).unwrap().add_child(elem_id);
 
             // Recursively process children
             for child in node.children() {
@@ -70,16 +69,14 @@ fn traverse_node(tree: &mut Tree, parent_id: usize, node: NodeRef<Node>) {
             if !trimmed.is_empty() {
                 let mut text_node = TreeNode::new("text", "text");
                 text_node.add_attribute("content", trimmed);
-                let text_id = tree.add_node(text_node);
-                tree.get_node_mut(parent_id).unwrap().add_child(text_id);
+                tree.add_child_node(parent_id, text_node);
             }
         }
 
         Node::Comment(comment) => {
             let mut comment_node = TreeNode::new("comment", "comment");
             comment_node.add_attribute("content", &comment.comment);
-            let comment_id = tree.add_node(comment_node);
-            tree.get_node_mut(parent_id).unwrap().add_child(comment_id);
+            tree.add_child_node(parent_id, comment_node);
         }
 
         // Skip other node types (Document, Doctype, ProcessingInstruction, etc.)
@@ -95,20 +92,22 @@ fn create_virtual_attributes_node(
         return None;
     }
 
-    let mut virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
+    let virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
 
     // Sort attributes alphanumerically by key
     let mut sorted_attrs = attributes.to_vec();
     sorted_attrs.sort_by(|a, b| a.key.cmp(&b.key));
 
+    // Add the virtual node first to get its ID
+    let virtual_id = tree.add_node(virtual_node);
+
     for attr in sorted_attrs {
         let mut attr_node = TreeNode::new(&attr.key, TreeNode::ATTRIBUTE_TYPE);
         attr_node.add_attribute("value", &attr.value);
-        let attr_id = tree.add_node(attr_node);
-        virtual_node.add_child(attr_id);
+        tree.add_child_node(virtual_id, attr_node);
     }
 
-    Some(tree.add_node(virtual_node))
+    Some(virtual_id)
 }
 
 #[cfg(test)]

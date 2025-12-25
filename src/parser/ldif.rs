@@ -233,7 +233,7 @@ impl<'a> LdifFileParser<'a> {
 
             // Create entry node with RDN as label
             let entry_node = TreeNode::new(&rdn, "entry");
-            let entry_id = tree.add_node(entry_node);
+            let entry_id = tree.add_child_node(parent_id, entry_node);
 
             // Store DN to node mapping
             dn_to_node.insert(entry.dn.clone(), entry_id);
@@ -249,7 +249,7 @@ impl<'a> LdifFileParser<'a> {
 
             // Create virtual attributes node
             let virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
-            let virtual_id = tree.add_node(virtual_node);
+            let virtual_id = tree.add_child_node(entry_id, virtual_node);
 
             // Sort attribute keys alphanumerically
             let mut sorted_keys: Vec<_> = attr_map.keys().collect();
@@ -261,24 +261,16 @@ impl<'a> LdifFileParser<'a> {
                 if values.len() == 1 {
                     let mut attr_node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
                     attr_node.add_attribute("value", &values[0]);
-                    let attr_id = tree.add_node(attr_node);
-                    tree.get_node_mut(virtual_id).unwrap().add_child(attr_id);
+                    tree.add_child_node(virtual_id, attr_node);
                 } else {
                     for (idx, value) in values.iter().enumerate() {
                         let label = format!("{} [{}]", key, idx);
                         let mut attr_node = TreeNode::new(&label, TreeNode::ATTRIBUTE_TYPE);
                         attr_node.add_attribute("value", value);
-                        let attr_id = tree.add_node(attr_node);
-                        tree.get_node_mut(virtual_id).unwrap().add_child(attr_id);
+                        tree.add_child_node(virtual_id, attr_node);
                     }
                 }
             }
-
-            // Link virtual node to entry
-            tree.get_node_mut(entry_id).unwrap().add_child(virtual_id);
-
-            // Link entry to parent
-            tree.get_node_mut(parent_id).unwrap().add_child(entry_id);
         }
 
         tree

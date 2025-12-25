@@ -97,7 +97,13 @@ impl App {
             .split(frame.size());
 
         // Render tree view (full width, no border)
-        self.tree_view.render(frame, main_chunks[0], &self.tree, &self.search_matches, self.current_match_index);
+        self.tree_view.render(
+            frame,
+            main_chunks[0],
+            &self.tree,
+            &self.search_matches,
+            self.current_match_index,
+        );
 
         // Render path bar
         let path = self.get_node_path();
@@ -118,12 +124,17 @@ impl App {
                     self.search_matches.len()
                 )
             } else {
-                format!(" Search: {} (0/{}) ", self.search_query, self.search_matches.len())
+                format!(
+                    " Search: {} (0/{}) ",
+                    self.search_query,
+                    self.search_matches.len()
+                )
             };
             let status_bar = Paragraph::new(match_info);
             frame.render_widget(status_bar, main_chunks[2]);
         } else {
-            let help_text = " ↑/↓/j/k: Move | h/l: Smart nav | Space: Toggle | /: Search | ?: Help | q: Quit ";
+            let help_text =
+                " ↑/↓/j/k: Move | h/l: Smart nav | Space: Toggle | /: Search | ?: Help | q: Quit ";
             let status_bar = Paragraph::new(help_text);
             frame.render_widget(status_bar, main_chunks[2]);
         }
@@ -480,7 +491,8 @@ impl App {
     // Copy text to clipboard
     fn copy_to_clipboard(&self, text: &str) -> Result<()> {
         use arboard::Clipboard;
-        let mut clipboard = Clipboard::new().map_err(|e| XtvError::Tui(format!("Clipboard error: {}", e)))?;
+        let mut clipboard =
+            Clipboard::new().map_err(|e| XtvError::Tui(format!("Clipboard error: {}", e)))?;
         clipboard
             .set_text(text.to_string())
             .map_err(|e| XtvError::Tui(format!("Failed to copy to clipboard: {}", e)))?;
@@ -510,9 +522,10 @@ impl App {
                 let matches = if self.case_sensitive {
                     node.label.contains(&query)
                         || node.node_type.contains(&query)
-                        || node.attributes.iter().any(|attr| {
-                            attr.key.contains(&query) || attr.value.contains(&query)
-                        })
+                        || node
+                            .attributes
+                            .iter()
+                            .any(|attr| attr.key.contains(&query) || attr.value.contains(&query))
                 } else {
                     node.label.to_lowercase().contains(&query)
                         || node.node_type.to_lowercase().contains(&query)

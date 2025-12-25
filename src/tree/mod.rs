@@ -27,6 +27,17 @@ impl Tree {
         id
     }
 
+    /// Add a node as a child of a parent node
+    /// This sets the parent_id on the child and adds it to the parent's children list
+    pub fn add_child_node(&mut self, parent_id: usize, mut node: TreeNode) -> usize {
+        node.parent_id = Some(parent_id);
+        let node_id = self.add_node(node);
+        if let Some(parent) = self.get_node_mut(parent_id) {
+            parent.children.push(node_id);
+        }
+        node_id
+    }
+
     /// Get a reference to a node by ID
     pub fn get_node(&self, id: usize) -> Option<&TreeNode> {
         self.nodes.get(id)
@@ -56,18 +67,9 @@ impl Tree {
 
     /// Find the parent of a given node by ID
     /// Returns None if the node is the root or parent is not found
+    /// This is now O(1) using the parent_id field
     pub fn get_parent(&self, child_id: usize) -> Option<usize> {
-        if child_id == self.root_id {
-            return None;
-        }
-
-        for (parent_id, node) in self.nodes.iter().enumerate() {
-            if node.children.contains(&child_id) {
-                return Some(parent_id);
-            }
-        }
-
-        None
+        self.get_node(child_id).and_then(|node| node.parent_id)
     }
 }
 

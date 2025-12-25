@@ -53,8 +53,7 @@ fn convert_value(tree: &mut Tree, parent_id: usize, value: &Value, key: &str) {
             // Add attribute for object size
             node.add_attribute("size", format!("{} fields", map.len()));
 
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            let node_id = tree.add_child_node(parent_id, node);
 
             // Recursively add children
             for (child_key, child_value) in map {
@@ -66,8 +65,7 @@ fn convert_value(tree: &mut Tree, parent_id: usize, value: &Value, key: &str) {
             let mut node = TreeNode::new(key, "array");
             node.add_attribute("size", format!("{} items", arr.len()));
 
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            let node_id = tree.add_child_node(parent_id, node);
 
             // Recursively add children with indices
             for (index, item) in arr.iter().enumerate() {
@@ -77,26 +75,22 @@ fn convert_value(tree: &mut Tree, parent_id: usize, value: &Value, key: &str) {
         Value::String(s) => {
             let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", s.clone());
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            tree.add_child_node(parent_id, node);
         }
         Value::Number(n) => {
             let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", n.to_string());
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            tree.add_child_node(parent_id, node);
         }
         Value::Bool(b) => {
             let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", b.to_string());
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            tree.add_child_node(parent_id, node);
         }
         Value::Null => {
             let mut node = TreeNode::new(key, TreeNode::ATTRIBUTE_TYPE);
             node.add_attribute("value", "null");
-            let node_id = tree.add_node(node);
-            tree.get_node_mut(parent_id).unwrap().add_child(node_id);
+            tree.add_child_node(parent_id, node);
         }
     }
 }

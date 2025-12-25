@@ -35,7 +35,13 @@ impl Parser for XmlParser {
 
                     // Clone attributes before adding node to tree
                     let attributes = node.attributes.clone();
-                    let node_id = tree.add_node(node);
+
+                    // Add as child to current parent
+                    let node_id = if let Some(&parent_id) = parent_stack.last() {
+                        tree.add_child_node(parent_id, node)
+                    } else {
+                        tree.add_node(node)
+                    };
 
                     // Create virtual attributes node if there are attributes
                     if let Some(virtual_id) = create_virtual_attributes_node(&mut tree, &attributes)
@@ -44,11 +50,6 @@ impl Parser for XmlParser {
                             .unwrap()
                             .children
                             .insert(0, virtual_id);
-                    }
-
-                    // Add as child to current parent
-                    if let Some(&parent_id) = parent_stack.last() {
-                        tree.get_node_mut(parent_id).unwrap().add_child(node_id);
                     }
 
                     // Push this node as the new parent
@@ -91,7 +92,13 @@ impl Parser for XmlParser {
 
                     // Clone attributes before adding node to tree
                     let attributes = node.attributes.clone();
-                    let node_id = tree.add_node(node);
+
+                    // Add as child to current parent
+                    let node_id = if let Some(&parent_id) = parent_stack.last() {
+                        tree.add_child_node(parent_id, node)
+                    } else {
+                        tree.add_node(node)
+                    };
 
                     // Create virtual attributes node if there are attributes
                     if let Some(virtual_id) = create_virtual_attributes_node(&mut tree, &attributes)
@@ -100,11 +107,6 @@ impl Parser for XmlParser {
                             .unwrap()
                             .children
                             .insert(0, virtual_id);
-                    }
-
-                    // Add as child to current parent
-                    if let Some(&parent_id) = parent_stack.last() {
-                        tree.get_node_mut(parent_id).unwrap().add_child(node_id);
                     }
                 }
                 Ok(Event::Eof) => break,
@@ -138,21 +140,23 @@ fn create_virtual_attributes_node(
     }
 
     // Create the virtual container node
-    let mut virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
+    let virtual_node = TreeNode::new("@attributes", TreeNode::VIRTUAL_ATTRIBUTES_TYPE);
 
     // Sort attributes alphanumerically by key
     let mut sorted_attrs = attributes.to_vec();
     sorted_attrs.sort_by(|a, b| a.key.cmp(&b.key));
 
+    // Add the virtual node first to get its ID
+    let virtual_id = tree.add_node(virtual_node);
+
     // Create individual attribute nodes as children
     for attr in sorted_attrs {
         let mut attr_node = TreeNode::new(&attr.key, TreeNode::ATTRIBUTE_TYPE);
         attr_node.add_attribute("value", &attr.value);
-        let attr_id = tree.add_node(attr_node);
-        virtual_node.add_child(attr_id);
+        tree.add_child_node(virtual_id, attr_node);
     }
 
-    Some(tree.add_node(virtual_node))
+    Some(virtual_id)
 }
 
 #[cfg(test)]

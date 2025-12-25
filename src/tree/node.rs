@@ -28,6 +28,9 @@ pub struct TreeNode {
 
     /// Child node IDs (indices into the tree's node vector)
     pub children: Vec<usize>,
+
+    /// Parent node ID (None for root node)
+    pub parent_id: Option<usize>,
 }
 
 impl TreeNode {
@@ -37,6 +40,7 @@ impl TreeNode {
             node_type: node_type.into(),
             attributes: Vec::new(),
             children: Vec::new(),
+            parent_id: None,
         }
     }
 
