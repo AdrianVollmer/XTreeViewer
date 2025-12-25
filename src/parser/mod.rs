@@ -2,6 +2,7 @@ pub mod html;
 pub mod json;
 pub mod ldif;
 pub mod xml;
+pub mod yaml;
 
 use crate::error::{Result, XtvError};
 use crate::tree::Tree;
@@ -28,6 +29,7 @@ pub fn detect_parser(file_path: &Path) -> Result<Box<dyn Parser>> {
         Some("xml") => Ok(Box::new(xml::XmlParser)),
         Some("html") | Some("htm") => Ok(Box::new(html::HtmlParser)),
         Some("ldif") => Ok(Box::new(ldif::LdifParser)),
+        Some("yaml") | Some("yml") => Ok(Box::new(yaml::YamlParser)),
         Some(ext) => Err(XtvError::UnsupportedFormat(format!(
             "File extension '.{}' is not supported",
             ext
@@ -45,6 +47,7 @@ pub fn get_parser_from_format(format: &str) -> Result<Box<dyn Parser>> {
         "xml" => Ok(Box::new(xml::XmlParser)),
         "html" | "htm" => Ok(Box::new(html::HtmlParser)),
         "ldif" => Ok(Box::new(ldif::LdifParser)),
+        "yaml" | "yml" => Ok(Box::new(yaml::YamlParser)),
         _ => Err(XtvError::UnsupportedFormat(format!(
             "Format '{}' is not supported",
             format
@@ -68,6 +71,13 @@ pub fn detect_parser_from_content(content: &str) -> Result<Box<dyn Parser>> {
         Ok(Box::new(json::JsonParser))
     } else if trimmed.starts_with("version:") || trimmed.starts_with("dn:") {
         Ok(Box::new(ldif::LdifParser))
+    } else if trimmed.starts_with("---") || trimmed.starts_with("%YAML") {
+        // YAML document separator or directive
+        Ok(Box::new(yaml::YamlParser))
+    } else if trimmed.contains(':') && !trimmed.contains("::") {
+        // Generic YAML-like structure (key: value pairs)
+        // Try YAML as it's more flexible than LDIF
+        Ok(Box::new(yaml::YamlParser))
     } else {
         Err(XtvError::UnsupportedFormat(
             "Could not detect format from content. Use --format to specify the format.".to_string(),

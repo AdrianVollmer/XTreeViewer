@@ -115,6 +115,57 @@ mail: second@example.com
 }
 
 #[test]
+fn test_parse_sample_yaml() {
+    let path = PathBuf::from("examples/sample.yaml");
+    let content = fs::read_to_string(&path).expect("Failed to read sample.yaml");
+
+    let parser = parser::detect_parser(&path).expect("Failed to detect parser");
+    let tree = parser.parse(&content).expect("Failed to parse YAML");
+
+    // Verify tree structure
+    assert!(tree.node_count() > 0);
+    let root = tree.get_node(tree.root_id()).unwrap();
+    assert_eq!(root.label, "root");
+    assert!(root.has_children());
+}
+
+#[test]
+fn test_yaml_nested_structure() {
+    let yaml = r#"
+database:
+  host: localhost
+  port: 5432
+  credentials:
+    username: admin
+    password: secret
+"#;
+    let parser = xtv::parser::yaml::YamlParser;
+    let tree = parser.parse(yaml).unwrap();
+
+    let root = tree.get_node(0).unwrap();
+    assert!(root.has_children());
+
+    // Should have the root mapping node
+    assert!(tree.node_count() > 5);
+}
+
+#[test]
+fn test_yaml_arrays() {
+    let yaml = r#"
+items:
+  - apple
+  - banana
+  - cherry
+"#;
+    let parser = xtv::parser::yaml::YamlParser;
+    let tree = parser.parse(yaml).unwrap();
+
+    // Should have root + root mapping + items sequence + 3 items
+    // = 1 + 1 + 1 + 3 = 6 nodes
+    assert!(tree.node_count() >= 5);
+}
+
+#[test]
 fn test_unsupported_format() {
     let path = PathBuf::from("test.unsupported");
     let result = parser::detect_parser(&path);
