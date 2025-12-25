@@ -20,6 +20,9 @@ pub struct App {
     tree_view: TreeView,
     should_quit: bool,
     show_help: bool,
+    last_key_was_y: bool,
+    last_key_was_p: bool,
+    print_content: Option<String>,
 }
 
 impl App {
@@ -31,6 +34,9 @@ impl App {
             tree_view,
             should_quit: false,
             show_help: false,
+            last_key_was_y: false,
+            last_key_was_p: false,
+            print_content: None,
         }
     }
 
@@ -89,13 +95,18 @@ impl App {
         frame.render_widget(path_bar, main_chunks[1]);
 
         // Render footer
-        let help_text = " ↑/↓: Navigate | Enter/→: Expand | ←: Collapse | c: Collapse Parent | q: Quit | ?: Help ";
+        let help_text = " ↑/↓/j/k: Move | h/l: Smart nav | Space: Toggle | J/K: Siblings | g/G: First/Last | ?: Help | q: Quit ";
         let status_bar = Paragraph::new(help_text);
         frame.render_widget(status_bar, main_chunks[2]);
 
         // Render help popup if shown
         if self.show_help {
             self.render_help_popup(frame);
+        }
+
+        // Render print popup if content is set
+        if self.print_content.is_some() {
+            self.render_print_popup(frame);
         }
     }
 
@@ -141,6 +152,12 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        // If print popup is shown, any key closes it
+        if self.print_content.is_some() {
+            self.print_content = None;
+            return Ok(());
+        }
+
         // If help is shown, handle help-specific keys
         if self.show_help {
             match key.code {
@@ -150,6 +167,66 @@ impl App {
                 _ => {}
             }
             return Ok(());
+        }
+
+        // Handle 'y' prefix commands (yank/copy)
+        if self.last_key_was_y {
+            self.last_key_was_y = false;
+            match key.code {
+                KeyCode::Char('y') => {
+                    if let Some(text) = self.get_node_value_pretty() {
+                        let _ = self.copy_to_clipboard(&text);
+                    }
+                    return Ok(());
+                }
+                KeyCode::Char('v') => {
+                    if let Some(text) = self.get_node_value_compact() {
+                        let _ = self.copy_to_clipboard(&text);
+                    }
+                    return Ok(());
+                }
+                KeyCode::Char('s') => {
+                    if let Some(text) = self.get_node_string_value() {
+                        let _ = self.copy_to_clipboard(&text);
+                    }
+                    return Ok(());
+                }
+                KeyCode::Char('k') => {
+                    if let Some(text) = self.get_node_key() {
+                        let _ = self.copy_to_clipboard(&text);
+                    }
+                    return Ok(());
+                }
+                _ => {
+                    // Fall through to normal handling
+                }
+            }
+        }
+
+        // Handle 'p' prefix commands (print)
+        if self.last_key_was_p {
+            self.last_key_was_p = false;
+            match key.code {
+                KeyCode::Char('p') => {
+                    self.print_content = self.get_node_value_pretty();
+                    return Ok(());
+                }
+                KeyCode::Char('v') => {
+                    self.print_content = self.get_node_value_compact();
+                    return Ok(());
+                }
+                KeyCode::Char('s') => {
+                    self.print_content = self.get_node_string_value();
+                    return Ok(());
+                }
+                KeyCode::Char('k') => {
+                    self.print_content = self.get_node_key();
+                    return Ok(());
+                }
+                _ => {
+                    // Fall through to normal handling
+                }
+            }
         }
 
         // Normal key handling
@@ -169,14 +246,50 @@ impl App {
             KeyCode::Down | KeyCode::Char('j') => {
                 self.tree_view.navigate_down(&self.tree);
             }
-            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
+            KeyCode::Enter => {
                 self.tree_view.toggle_expand(&self.tree);
             }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.tree_view.smart_right(&self.tree);
+            }
             KeyCode::Left | KeyCode::Char('h') => {
-                self.tree_view.collapse(&self.tree);
+                self.tree_view.smart_left(&self.tree);
+            }
+            KeyCode::Char('H') => {
+                self.tree_view.navigate_to_parent(&self.tree);
+            }
+            KeyCode::Char(' ') => {
+                self.tree_view.toggle_expand(&self.tree);
+            }
+            KeyCode::Char('J') => {
+                self.tree_view.navigate_to_next_sibling(&self.tree);
+            }
+            KeyCode::Char('K') => {
+                self.tree_view.navigate_to_previous_sibling(&self.tree);
+            }
+            KeyCode::Char('0') => {
+                self.tree_view.navigate_to_first_sibling(&self.tree);
+            }
+            KeyCode::Char('$') => {
+                self.tree_view.navigate_to_last_sibling(&self.tree);
+            }
+            KeyCode::Char('g') => {
+                self.tree_view.navigate_to_first_line();
+            }
+            KeyCode::Char('G') => {
+                self.tree_view.navigate_to_last_line(&self.tree);
+            }
+            KeyCode::Char('e') => {
+                self.tree_view.expand_all_siblings(&self.tree);
+            }
+            KeyCode::Char('E') => {
+                self.tree_view.expand_all_siblings_deep(&self.tree);
             }
             KeyCode::Char('c') => {
-                self.tree_view.collapse_parent(&self.tree);
+                self.tree_view.collapse_all_siblings(&self.tree);
+            }
+            KeyCode::Char('C') => {
+                self.tree_view.collapse_all_siblings_deep(&self.tree);
             }
             KeyCode::PageUp => {
                 for _ in 0..10 {
@@ -188,8 +301,114 @@ impl App {
                     self.tree_view.navigate_down(&self.tree);
                 }
             }
+            KeyCode::Char('y') => {
+                self.last_key_was_y = true;
+                return Ok(());
+            }
+            KeyCode::Char('p') => {
+                self.last_key_was_p = true;
+                return Ok(());
+            }
+            KeyCode::Char('[') => {
+                for _ in 0..10 {
+                    self.tree_view.navigate_up();
+                }
+            }
+            KeyCode::Char(']') => {
+                for _ in 0..10 {
+                    self.tree_view.navigate_down(&self.tree);
+                }
+            }
             _ => {}
         }
+
+        // Reset all prefix flags if we didn't handle them
+        self.last_key_was_y = false;
+        self.last_key_was_p = false;
+
+        Ok(())
+    }
+
+    // Get the node value as pretty-printed JSON
+    fn get_node_value_pretty(&self) -> Option<String> {
+        let node_id = self.tree_view.get_selected_node_id()?;
+        let node = self.tree.get_node(node_id)?;
+
+        // Convert node to JSON value and pretty print
+        let json_value = self.node_to_json(&node)?;
+        serde_json::to_string_pretty(&json_value).ok()
+    }
+
+    // Get the node value as compact one-line JSON
+    fn get_node_value_compact(&self) -> Option<String> {
+        let node_id = self.tree_view.get_selected_node_id()?;
+        let node = self.tree.get_node(node_id)?;
+
+        let json_value = self.node_to_json(&node)?;
+        serde_json::to_string(&json_value).ok()
+    }
+
+    // Get the string value if the node is a string
+    fn get_node_string_value(&self) -> Option<String> {
+        let node_id = self.tree_view.get_selected_node_id()?;
+        let node = self.tree.get_node(node_id)?;
+
+        // For attribute nodes, get the value
+        if node.is_attribute() || node.node_type == "text" || node.node_type == "comment" {
+            node.attributes.first().map(|attr| attr.value.clone())
+        } else {
+            None
+        }
+    }
+
+    // Get the key/label of the current node
+    fn get_node_key(&self) -> Option<String> {
+        let node_id = self.tree_view.get_selected_node_id()?;
+        let node = self.tree.get_node(node_id)?;
+        Some(node.label.clone())
+    }
+
+    // Convert a tree node to a JSON value
+    fn node_to_json(&self, node: &crate::tree::TreeNode) -> Option<serde_json::Value> {
+        use serde_json::{Map, Value};
+
+        // For attribute nodes, return the value directly
+        if node.is_attribute() {
+            if let Some(attr) = node.attributes.first() {
+                // Try to parse as JSON, otherwise return as string
+                return serde_json::from_str(&attr.value)
+                    .unwrap_or_else(|_| Value::String(attr.value.clone()))
+                    .into();
+            }
+        }
+
+        // For text/comment nodes, return the content
+        if node.node_type == "text" || node.node_type == "comment" {
+            if let Some(content) = node.attributes.iter().find(|a| a.key == "content") {
+                return Some(Value::String(content.value.clone()));
+            }
+        }
+
+        // For container nodes, build object or array
+        if node.node_type == "object" {
+            let map = Map::new();
+            // Get children and build object
+            // This is a simplified version - in reality we'd need to traverse children
+            Some(Value::Object(map))
+        } else if node.node_type == "array" {
+            Some(Value::Array(vec![]))
+        } else {
+            Some(Value::String(node.label.clone()))
+        }
+    }
+
+    // Copy text to clipboard
+    fn copy_to_clipboard(&self, text: &str) -> Result<()> {
+        use arboard::Clipboard;
+        let mut clipboard = Clipboard::new().map_err(|e| XtvError::Tui(format!("Clipboard error: {}", e)))?;
+        clipboard
+            .set_text(text.to_string())
+            .map_err(|e| XtvError::Tui(format!("Failed to copy to clipboard: {}", e)))?;
         Ok(())
     }
 
@@ -203,8 +422,8 @@ impl App {
 
         // Create centered popup area
         let area = frame.size();
-        let popup_width = 60.min(area.width - 4);
-        let popup_height = 18.min(area.height - 4);
+        let popup_width = 80.min(area.width - 4);
+        let popup_height = 25.min(area.height - 4);
         let popup_x = (area.width - popup_width) / 2;
         let popup_y = (area.height - popup_height) / 2;
 
@@ -227,10 +446,12 @@ impl App {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             )]),
-            Line::from("  ↑/k       Move up"),
-            Line::from("  ↓/j       Move down"),
-            Line::from("  PgUp      Move up 10 items"),
-            Line::from("  PgDn      Move down 10 items"),
+            Line::from("  ↑/k       Move up              ↓/j       Move down"),
+            Line::from("  PgUp/[    Move up 10 items     PgDn/]    Move down 10 items"),
+            Line::from("  g         First line           G         Last line"),
+            Line::from("  J         Next sibling         K         Previous sibling"),
+            Line::from("  0         First sibling        $         Last sibling"),
+            Line::from("  H         Navigate to parent"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Tree Manipulation",
@@ -238,9 +459,23 @@ impl App {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             )]),
-            Line::from("  Enter/→/l Expand node"),
-            Line::from("  ←/h       Collapse node"),
-            Line::from("  c         Collapse parent node"),
+            Line::from("  →/l       Smart right: expand or move to first child"),
+            Line::from("  ←/h       Smart left: collapse or move to parent"),
+            Line::from("  Space     Toggle expand/collapse current node"),
+            Line::from("  Enter     Toggle expand/collapse current node"),
+            Line::from("  e         Expand siblings      E         Expand siblings (deep)"),
+            Line::from("  c         Collapse siblings    C         Collapse siblings (deep)"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Copy/Print",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from("  yy        Copy value (pretty)  pp        Print value (pretty)"),
+            Line::from("  yv        Copy value (compact) pv        Print value (compact)"),
+            Line::from("  ys        Copy string value    ps        Print string value"),
+            Line::from("  yk        Copy key/label       pk        Print key/label"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Other",
@@ -263,5 +498,46 @@ impl App {
             .alignment(Alignment::Left);
 
         frame.render_widget(help_paragraph, popup_area);
+    }
+
+    fn render_print_popup(&self, frame: &mut ratatui::Frame) {
+        use ratatui::{
+            layout::Alignment,
+            style::{Color, Style},
+            widgets::{Block, Borders, Clear, Paragraph, Wrap},
+        };
+
+        if let Some(content) = &self.print_content {
+            // Create centered popup area
+            let area = frame.size();
+            let popup_width = (area.width * 4 / 5).min(100);
+            let popup_height = (area.height * 3 / 4).min(30);
+            let popup_x = (area.width - popup_width) / 2;
+            let popup_y = (area.height - popup_height) / 2;
+
+            let popup_area = ratatui::layout::Rect {
+                x: popup_x,
+                y: popup_y,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            // Clear the area
+            frame.render_widget(Clear, popup_area);
+
+            // Create paragraph with content
+            let paragraph = Paragraph::new(content.as_str())
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Printed Content (press any key to close) ")
+                        .title_alignment(Alignment::Center)
+                        .style(Style::default().bg(Color::Black)),
+                )
+                .wrap(Wrap { trim: false })
+                .alignment(Alignment::Left);
+
+            frame.render_widget(paragraph, popup_area);
+        }
     }
 }

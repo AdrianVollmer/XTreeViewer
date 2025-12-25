@@ -238,4 +238,257 @@ impl TreeView {
             }
         }
     }
+
+    pub fn expand(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                let node = tree.get_node(*node_id).unwrap();
+                if node.has_children() {
+                    self.expanded.insert(*node_id);
+                }
+            }
+        }
+    }
+
+    // Smart left: collapse if expanded, otherwise move to parent
+    pub fn smart_left(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                let node = tree.get_node(*node_id).unwrap();
+                if node.has_children() && self.expanded.contains(node_id) {
+                    // Collapse if expanded
+                    self.expanded.remove(node_id);
+                } else {
+                    // Move to parent
+                    self.navigate_to_parent(tree);
+                }
+            }
+        }
+    }
+
+    // Smart right: expand if collapsed, move to first child if expanded
+    pub fn smart_right(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                let node = tree.get_node(*node_id).unwrap();
+                if node.has_children() {
+                    if !self.expanded.contains(node_id) {
+                        // Expand if collapsed
+                        self.expanded.insert(*node_id);
+                    } else {
+                        // Move to first child if expanded
+                        self.rebuild_visible_nodes(tree);
+                        if index + 1 < self.visible_nodes.len() {
+                            self.list_state.select(Some(index + 1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to parent without collapsing
+    pub fn navigate_to_parent(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    // Find the index of the parent in the visible nodes
+                    if let Some(parent_index) = self
+                        .visible_nodes
+                        .iter()
+                        .position(|(id, _)| *id == parent_id)
+                    {
+                        self.list_state.select(Some(parent_index));
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to next sibling
+    pub fn navigate_to_next_sibling(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    if let Some(current_pos) = siblings.iter().position(|&id| id == *node_id) {
+                        if current_pos + 1 < siblings.len() {
+                            let next_sibling = siblings[current_pos + 1];
+                            // Find this sibling in visible nodes
+                            if let Some(sibling_index) = self
+                                .visible_nodes
+                                .iter()
+                                .position(|(id, _)| *id == next_sibling)
+                            {
+                                self.list_state.select(Some(sibling_index));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to previous sibling
+    pub fn navigate_to_previous_sibling(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    if let Some(current_pos) = siblings.iter().position(|&id| id == *node_id) {
+                        if current_pos > 0 {
+                            let prev_sibling = siblings[current_pos - 1];
+                            // Find this sibling in visible nodes
+                            if let Some(sibling_index) = self
+                                .visible_nodes
+                                .iter()
+                                .position(|(id, _)| *id == prev_sibling)
+                            {
+                                self.list_state.select(Some(sibling_index));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to first sibling
+    pub fn navigate_to_first_sibling(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    if let Some(first_sibling) = siblings.first() {
+                        // Find this sibling in visible nodes
+                        if let Some(sibling_index) = self
+                            .visible_nodes
+                            .iter()
+                            .position(|(id, _)| *id == *first_sibling)
+                        {
+                            self.list_state.select(Some(sibling_index));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to last sibling
+    pub fn navigate_to_last_sibling(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    if let Some(last_sibling) = siblings.last() {
+                        // Find this sibling in visible nodes
+                        if let Some(sibling_index) = self
+                            .visible_nodes
+                            .iter()
+                            .position(|(id, _)| *id == *last_sibling)
+                        {
+                            self.list_state.select(Some(sibling_index));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Navigate to first line
+    pub fn navigate_to_first_line(&mut self) {
+        self.list_state.select(Some(0));
+    }
+
+    // Navigate to last line
+    pub fn navigate_to_last_line(&mut self, tree: &TreeVariant) {
+        self.rebuild_visible_nodes(tree);
+        if !self.visible_nodes.is_empty() {
+            self.list_state.select(Some(self.visible_nodes.len() - 1));
+        }
+    }
+
+    // Shallow expand focused node and all its siblings
+    pub fn expand_all_siblings(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    for sibling_id in siblings {
+                        let sibling = tree.get_node(sibling_id).unwrap();
+                        if sibling.has_children() {
+                            self.expanded.insert(sibling_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Deep expand focused node and all its siblings (recursively expand all descendants)
+    pub fn expand_all_siblings_deep(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    for sibling_id in siblings {
+                        self.expand_recursive(tree, sibling_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Shallow collapse focused node and all its siblings
+    pub fn collapse_all_siblings(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    for sibling_id in siblings {
+                        self.expanded.remove(&sibling_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Deep collapse focused node and all its siblings (recursively collapse all descendants)
+    pub fn collapse_all_siblings_deep(&mut self, tree: &TreeVariant) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some((node_id, _)) = self.visible_nodes.get(index) {
+                if let Some(parent_id) = tree.get_parent(*node_id) {
+                    let siblings = tree.get_children(parent_id);
+                    for sibling_id in siblings {
+                        self.collapse_recursive(tree, sibling_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper: recursively expand a node and all its descendants
+    fn expand_recursive(&mut self, tree: &TreeVariant, node_id: usize) {
+        let node = tree.get_node(node_id).unwrap();
+        if node.has_children() {
+            self.expanded.insert(node_id);
+            let children = tree.get_children(node_id);
+            for child_id in children {
+                self.expand_recursive(tree, child_id);
+            }
+        }
+    }
+
+    // Helper: recursively collapse a node and all its descendants
+    fn collapse_recursive(&mut self, tree: &TreeVariant, node_id: usize) {
+        let node = tree.get_node(node_id).unwrap();
+        if node.has_children() {
+            self.expanded.remove(&node_id);
+            let children = tree.get_children(node_id);
+            for child_id in children {
+                self.collapse_recursive(tree, child_id);
+            }
+        }
+    }
+
 }

@@ -39,5 +39,8 @@ base64 = "0.21"
 lru = "0.12"
 indicatif = "0.17"
 
+# Clipboard support
+arboard = "3.4"
+
 [dev-dependencies]
 tempfile = "3.13"
