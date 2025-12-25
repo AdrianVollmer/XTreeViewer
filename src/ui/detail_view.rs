@@ -1,10 +1,10 @@
 use crate::tree::TreeNode;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
-    Frame,
 };
 
 pub struct DetailView;
@@ -74,8 +74,7 @@ impl DetailView {
         if node.node_type == "text" || node.node_type == "comment" {
             // For text and comment nodes, display content directly without header or indentation
             if let Some(content_attr) = node.attributes.iter().find(|a| a.key == "content") {
-                let value_lines =
-                    self.wrap_text(&content_attr.value, area.width as usize);
+                let value_lines = self.wrap_text(&content_attr.value, area.width as usize);
                 for line in value_lines.iter() {
                     items.push(ListItem::new(Line::from(Span::styled(
                         line.clone(),
@@ -86,8 +85,7 @@ impl DetailView {
         } else if node.is_attribute() {
             // For attribute nodes, display value directly without header or indentation
             if let Some(value_attr) = node.attributes.iter().find(|a| a.key == "value") {
-                let value_lines =
-                    self.wrap_text(&value_attr.value, area.width as usize);
+                let value_lines = self.wrap_text(&value_attr.value, area.width as usize);
                 for line in value_lines.iter() {
                     items.push(ListItem::new(Line::from(Span::styled(
                         line.clone(),

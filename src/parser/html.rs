@@ -2,7 +2,7 @@ use super::Parser;
 use crate::error::Result;
 use crate::tree::{Tree, TreeNode};
 use ego_tree::NodeRef;
-use scraper::{node::Node, Html};
+use scraper::{Html, node::Node};
 use std::path::Path;
 
 pub struct HtmlParser;

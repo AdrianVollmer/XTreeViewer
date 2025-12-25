@@ -1,29 +1,29 @@
 use crate::error::{Result, XtvError};
-use crate::tree::Tree;
+use crate::tree::TreeVariant;
 use crate::ui::tree_view::TreeView;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::Paragraph,
-    Terminal,
 };
 use std::io;
 
 pub struct App {
-    tree: Tree,
+    tree: TreeVariant,
     tree_view: TreeView,
     should_quit: bool,
     show_help: bool,
 }
 
 impl App {
-    pub fn new(tree: Tree) -> Self {
+    pub fn new(tree: TreeVariant) -> Self {
         let tree_view = TreeView::new(tree.root_id());
 
         Self {
@@ -74,9 +74,9 @@ impl App {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),      // Tree view
-                Constraint::Length(1),   // Path bar
-                Constraint::Length(1),   // Footer
+                Constraint::Min(0),    // Tree view
+                Constraint::Length(1), // Path bar
+                Constraint::Length(1), // Footer
             ])
             .split(frame.size());
 
@@ -85,8 +85,7 @@ impl App {
 
         // Render path bar
         let path = self.get_node_path();
-        let path_bar = Paragraph::new(path)
-            .style(Style::default().fg(Color::Gray));
+        let path_bar = Paragraph::new(path).style(Style::default().fg(Color::Gray));
         frame.render_widget(path_bar, main_chunks[1]);
 
         // Render footer
@@ -222,24 +221,33 @@ impl App {
         // Create help text
         let help_lines = vec![
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Navigation", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Navigation",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  ↑/k       Move up"),
             Line::from("  ↓/j       Move down"),
             Line::from("  PgUp      Move up 10 items"),
             Line::from("  PgDn      Move down 10 items"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Tree Manipulation", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Tree Manipulation",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  Enter/→/l Expand node"),
             Line::from("  ←/h       Collapse node"),
             Line::from("  c         Collapse parent node"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Other", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Other",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  ?         Toggle this help"),
             Line::from("  q/Esc     Quit"),
         ];
@@ -250,7 +258,7 @@ impl App {
                     .borders(Borders::ALL)
                     .title(" Keyboard Shortcuts ")
                     .title_alignment(Alignment::Center)
-                    .style(Style::default().bg(Color::Black))
+                    .style(Style::default().bg(Color::Black)),
             )
             .alignment(Alignment::Left);
 

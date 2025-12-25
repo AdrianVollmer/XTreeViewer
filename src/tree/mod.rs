@@ -1,6 +1,8 @@
 pub mod node;
+pub mod streaming;
 
 pub use node::{Attribute, TreeNode};
+pub use streaming::StreamingTree;
 
 /// Tree structure that stores nodes in a Vec for efficient access
 #[derive(Debug)]
@@ -66,6 +68,55 @@ impl Tree {
         }
 
         None
+    }
+}
+
+/// Enum representing either an in-memory tree or a streaming tree
+#[derive(Debug)]
+pub enum TreeVariant {
+    InMemory(Tree),
+    Streaming(StreamingTree),
+}
+
+impl TreeVariant {
+    /// Get a reference to a node by ID
+    pub fn get_node(&self, id: usize) -> Option<TreeNode> {
+        match self {
+            TreeVariant::InMemory(tree) => tree.get_node(id).cloned(),
+            TreeVariant::Streaming(tree) => tree.get_node(id),
+        }
+    }
+
+    /// Get the root node ID
+    pub fn root_id(&self) -> usize {
+        match self {
+            TreeVariant::InMemory(tree) => tree.root_id(),
+            TreeVariant::Streaming(tree) => tree.root_id(),
+        }
+    }
+
+    /// Get the children IDs of a node
+    pub fn get_children(&self, id: usize) -> Vec<usize> {
+        match self {
+            TreeVariant::InMemory(tree) => tree.get_children(id),
+            TreeVariant::Streaming(tree) => tree.get_children(id),
+        }
+    }
+
+    /// Get the total number of nodes in the tree
+    pub fn node_count(&self) -> usize {
+        match self {
+            TreeVariant::InMemory(tree) => tree.node_count(),
+            TreeVariant::Streaming(tree) => tree.node_count(),
+        }
+    }
+
+    /// Find the parent of a given node by ID
+    pub fn get_parent(&self, child_id: usize) -> Option<usize> {
+        match self {
+            TreeVariant::InMemory(tree) => tree.get_parent(child_id),
+            TreeVariant::Streaming(tree) => tree.get_parent(child_id),
+        }
     }
 }
 

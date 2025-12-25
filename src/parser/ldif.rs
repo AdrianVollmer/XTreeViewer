@@ -1,7 +1,10 @@
 use super::Parser;
 use crate::error::{Result, XtvError};
-use crate::tree::{Tree, TreeNode};
+use crate::tree::{Tree, TreeNode, streaming::*};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 pub struct LdifParser;
@@ -176,7 +179,7 @@ impl<'a> LdifFileParser<'a> {
     }
 
     fn decode_base64(&self, encoded: &str) -> Result<String> {
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
 
         match general_purpose::STANDARD.decode(encoded) {
             Ok(bytes) => {
@@ -346,6 +349,126 @@ fn hex_preview(bytes: &[u8]) -> String {
         .map(|b| format!("{:02x}", b))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Build an index for streaming LDIF parsing
+pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
+    let file = File::open(file_path)?;
+    let file_size = file.metadata()?.len();
+    let reader = BufReader::new(file);
+
+    // Setup progress bar
+    let pb = ProgressBar::new(file_size);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} {msg}")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    pb.set_message("Building index...");
+
+    let mut index = LdifIndex::new(0);
+    let mut dn_to_id: HashMap<String, usize> = HashMap::new();
+
+    // Add root node
+    let root_entry = IndexEntry::new(0, None);
+    let root_id = index.add_entry(root_entry);
+
+    let mut current_offset = 0u64;
+    let mut lines_iter = reader.lines();
+
+    // Skip version line if present
+    if let Some(Ok(first_line)) = lines_iter.next() {
+        current_offset += first_line.len() as u64 + 1; // +1 for newline
+
+        if !first_line.starts_with("version:") {
+            // Not a version line, we need to process it
+            // Reset to start
+            let file = File::open(file_path)?;
+            let reader = BufReader::new(file);
+            lines_iter = reader.lines();
+            current_offset = 0;
+        }
+    }
+
+    // Parse entries and build index
+    while let Some(Ok(line)) = lines_iter.next() {
+        let line_len = line.len() as u64 + 1; // +1 for newline
+
+        // Skip empty lines and comments
+        if line.trim().is_empty() || line.starts_with('#') {
+            current_offset += line_len;
+            pb.set_position(current_offset);
+            continue;
+        }
+
+        // Check if this is a DN line (start of entry)
+        if line.starts_with("dn:") {
+            let entry_offset = current_offset;
+            let mut dn = line[3..].trim().to_string();
+
+            // Handle line folding for DN
+            current_offset += line_len;
+            let mut next_line_buf = String::new();
+            while let Some(Ok(next_line)) = lines_iter.next() {
+                let next_len = next_line.len() as u64 + 1;
+                if next_line.starts_with(' ') {
+                    // Continuation line
+                    dn.push_str(&next_line[1..]);
+                    current_offset += next_len;
+                } else {
+                    next_line_buf = next_line;
+                    current_offset += next_len;
+                    break;
+                }
+            }
+
+            // Determine parent DN
+            let parent_dn = get_parent_dn(&dn);
+            let parent_id = if let Some(ref pdn) = parent_dn {
+                dn_to_id.get(pdn).copied().unwrap_or(root_id)
+            } else {
+                root_id
+            };
+
+            // Create index entry for this LDIF entry
+            let entry_node = IndexEntry::new(entry_offset, Some(parent_id));
+            let entry_id = index.add_entry(entry_node);
+
+            // Store DN to ID mapping
+            dn_to_id.insert(dn.clone(), entry_id);
+
+            // Add child to parent
+            index.add_child(parent_id, entry_id);
+
+            // Read until empty line (end of entry)
+            if !next_line_buf.is_empty() {
+                // Process the line we already read
+                if next_line_buf.trim().is_empty() {
+                    pb.set_position(current_offset);
+                    continue;
+                }
+            }
+
+            while let Some(Ok(line)) = lines_iter.next() {
+                let len = line.len() as u64 + 1;
+                current_offset += len;
+
+                if line.trim().is_empty() {
+                    break;
+                }
+            }
+
+            pb.set_position(current_offset);
+        } else {
+            current_offset += line_len;
+            pb.set_position(current_offset);
+        }
+    }
+
+    pb.finish_with_message("Index complete");
+
+    Ok(StreamingTree::new(file_path.to_path_buf(), index))
 }
 
 #[cfg(test)]
@@ -563,14 +686,18 @@ cn: John Doe
 
         // dc=example,dc=com should have @attributes and ou=People
         // First child is @attributes, find ou=People
-        let ou_node = dc_node.children.iter()
+        let ou_node = dc_node
+            .children
+            .iter()
             .map(|&id| tree.get_node(id).unwrap())
             .find(|n| n.node_type == "entry")
             .expect("Should have ou=People entry");
         assert_eq!(ou_node.label, "ou=People"); // Relative to parent
 
         // ou=People should have @attributes and cn=John Doe
-        let cn_node = ou_node.children.iter()
+        let cn_node = ou_node
+            .children
+            .iter()
             .map(|&id| tree.get_node(id).unwrap())
             .find(|n| n.node_type == "entry")
             .expect("Should have cn=John Doe entry");
@@ -592,16 +719,16 @@ cn: John Doe
 
         // Test compute_rdn
         assert_eq!(
-            compute_rdn("cn=John Doe,ou=People,dc=example,dc=com", Some("ou=People,dc=example,dc=com")),
+            compute_rdn(
+                "cn=John Doe,ou=People,dc=example,dc=com",
+                Some("ou=People,dc=example,dc=com")
+            ),
             "cn=John Doe"
         );
         assert_eq!(
             compute_rdn("ou=People,dc=example,dc=com", Some("dc=example,dc=com")),
             "ou=People"
         );
-        assert_eq!(
-            compute_rdn("dc=example,dc=com", None),
-            "dc=example,dc=com"
-        );
+        assert_eq!(compute_rdn("dc=example,dc=com", None), "dc=example,dc=com");
     }
 }

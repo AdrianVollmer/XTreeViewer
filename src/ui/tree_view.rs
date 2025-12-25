@@ -1,10 +1,10 @@
-use crate::tree::Tree;
+use crate::tree::TreeVariant;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, ListState},
-    Frame,
 };
 use std::collections::HashSet;
 
@@ -29,7 +29,7 @@ impl TreeView {
         view
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, tree: &Tree) {
+    pub fn render(&mut self, frame: &mut Frame, area: Rect, tree: &TreeVariant) {
         // Rebuild visible nodes list
         self.rebuild_visible_nodes(tree);
 
@@ -54,12 +54,12 @@ impl TreeView {
         frame.render_stateful_widget(list, area, &mut self.list_state);
     }
 
-    fn create_list_item<'a>(
+    fn create_list_item(
         &self,
-        node: &'a crate::tree::TreeNode,
+        node: crate::tree::TreeNode,
         depth: usize,
         node_id: usize,
-    ) -> ListItem<'a> {
+    ) -> ListItem<'static> {
         let indent = "  ".repeat(depth);
         let icon = if node.is_virtual_attributes() {
             // Virtual attribute nodes get hollow/solid diamond
@@ -96,7 +96,10 @@ impl TreeView {
         } else {
             Color::Cyan
         };
-        spans.push(Span::styled(&node.label, Style::default().fg(label_color)));
+        spans.push(Span::styled(
+            node.label.clone(),
+            Style::default().fg(label_color),
+        ));
 
         // For attribute nodes, show key: value (no type bracket)
         // For text/comment nodes, show label: content
@@ -132,12 +135,12 @@ impl TreeView {
         ListItem::new(Line::from(spans))
     }
 
-    fn rebuild_visible_nodes(&mut self, tree: &Tree) {
+    fn rebuild_visible_nodes(&mut self, tree: &TreeVariant) {
         self.visible_nodes.clear();
         self.collect_visible_nodes(tree, tree.root_id(), 0);
     }
 
-    fn collect_visible_nodes(&mut self, tree: &Tree, node_id: usize, depth: usize) {
+    fn collect_visible_nodes(&mut self, tree: &TreeVariant, node_id: usize, depth: usize) {
         self.visible_nodes.push((node_id, depth));
 
         // If expanded, add children
@@ -163,7 +166,7 @@ impl TreeView {
         self.list_state.select(Some(i));
     }
 
-    pub fn navigate_down(&mut self, tree: &Tree) {
+    pub fn navigate_down(&mut self, tree: &TreeVariant) {
         self.rebuild_visible_nodes(tree);
         let i = match self.list_state.selected() {
             Some(i) => {
@@ -178,7 +181,7 @@ impl TreeView {
         self.list_state.select(Some(i));
     }
 
-    pub fn toggle_expand(&mut self, tree: &Tree) {
+    pub fn toggle_expand(&mut self, tree: &TreeVariant) {
         if let Some(index) = self.list_state.selected() {
             if let Some((node_id, _)) = self.visible_nodes.get(index) {
                 let node = tree.get_node(*node_id).unwrap();
@@ -193,7 +196,7 @@ impl TreeView {
         }
     }
 
-    pub fn collapse(&mut self, _tree: &Tree) {
+    pub fn collapse(&mut self, _tree: &TreeVariant) {
         if let Some(index) = self.list_state.selected() {
             if let Some((node_id, _)) = self.visible_nodes.get(index) {
                 if self.expanded.contains(node_id) {
@@ -211,7 +214,7 @@ impl TreeView {
             .map(|(node_id, _)| *node_id)
     }
 
-    pub fn collapse_parent(&mut self, tree: &Tree) {
+    pub fn collapse_parent(&mut self, tree: &TreeVariant) {
         if let Some(index) = self.list_state.selected() {
             if let Some((node_id, _)) = self.visible_nodes.get(index) {
                 // Find the parent of the current node

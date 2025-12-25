@@ -13,4 +13,12 @@ pub struct Cli {
     /// Format to use when reading from stdin (xml, json, html, ldif)
     #[clap(short, long, value_name = "FORMAT")]
     pub format: Option<String>,
+
+    /// Threshold in bytes for switching to streaming mode (default: 100MB)
+    #[clap(long, value_name = "BYTES", default_value = "104857600")]
+    pub streaming_threshold: u64,
+
+    /// Disable streaming mode (always load entire file into memory)
+    #[clap(long)]
+    pub no_streaming: bool,
 }

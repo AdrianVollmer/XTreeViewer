@@ -1,8 +1,8 @@
 use super::Parser;
 use crate::error::{Result, XtvError};
 use crate::tree::{Tree, TreeNode};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::path::Path;
 
 pub struct XmlParser;
