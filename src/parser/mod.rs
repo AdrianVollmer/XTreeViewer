@@ -1,5 +1,6 @@
 pub mod html;
 pub mod json;
+pub mod jsonlines;
 pub mod ldif;
 pub mod xml;
 pub mod yaml;
@@ -26,6 +27,7 @@ pub fn detect_parser(file_path: &Path) -> Result<Box<dyn Parser>> {
 
     match extension.as_deref() {
         Some("json") => Ok(Box::new(json::JsonParser)),
+        Some("jsonl") => Ok(Box::new(jsonlines::JsonLinesParser)),
         Some("xml") => Ok(Box::new(xml::XmlParser)),
         Some("html") | Some("htm") => Ok(Box::new(html::HtmlParser)),
         Some("ldif") => Ok(Box::new(ldif::LdifParser)),
@@ -44,6 +46,7 @@ pub fn detect_parser(file_path: &Path) -> Result<Box<dyn Parser>> {
 pub fn get_parser_from_format(format: &str) -> Result<Box<dyn Parser>> {
     match format.to_lowercase().as_str() {
         "json" => Ok(Box::new(json::JsonParser)),
+        "jsonl" | "jsonlines" => Ok(Box::new(jsonlines::JsonLinesParser)),
         "xml" => Ok(Box::new(xml::XmlParser)),
         "html" | "htm" => Ok(Box::new(html::HtmlParser)),
         "ldif" => Ok(Box::new(ldif::LdifParser)),

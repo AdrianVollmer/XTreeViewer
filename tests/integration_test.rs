@@ -166,6 +166,46 @@ items:
 }
 
 #[test]
+fn test_parse_sample_jsonlines() {
+    let path = PathBuf::from("examples/sample.jsonl");
+    let content = fs::read_to_string(&path).expect("Failed to read sample.jsonl");
+
+    let parser = parser::detect_parser(&path).expect("Failed to detect parser");
+    let tree = parser.parse(&content).expect("Failed to parse JSON Lines");
+
+    // Verify tree structure
+    assert!(tree.node_count() > 0);
+    let root = tree.get_node(tree.root_id()).unwrap();
+    assert_eq!(root.label, "root");
+    assert!(root.has_children());
+
+    // Should have 7 children (one for each line in sample.jsonl)
+    assert_eq!(root.children.len(), 7);
+}
+
+#[test]
+fn test_jsonlines_line_numbering() {
+    let jsonl = r#"{"id": 1}
+{"id": 2}
+{"id": 3}"#;
+    let parser = xtv::parser::jsonlines::JsonLinesParser;
+    let tree = parser.parse(jsonl).unwrap();
+
+    let root = tree.get_node(0).unwrap();
+    assert_eq!(root.children.len(), 3);
+
+    // Check that lines are numbered starting from 1
+    let first_line = tree.get_node(root.children[0]).unwrap();
+    assert_eq!(first_line.label, "[1]");
+
+    let second_line = tree.get_node(root.children[1]).unwrap();
+    assert_eq!(second_line.label, "[2]");
+
+    let third_line = tree.get_node(root.children[2]).unwrap();
+    assert_eq!(third_line.label, "[3]");
+}
+
+#[test]
 fn test_unsupported_format() {
     let path = PathBuf::from("test.unsupported");
     let result = parser::detect_parser(&path);

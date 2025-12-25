@@ -1,0 +1,7 @@
+{"timestamp": "2024-01-15T10:30:00Z", "level": "INFO", "message": "Application started", "service": "web-api", "version": "1.2.3"}
+{"timestamp": "2024-01-15T10:30:05Z", "level": "INFO", "message": "Database connection established", "service": "web-api", "database": "postgresql", "host": "db.example.com"}
+{"timestamp": "2024-01-15T10:30:10Z", "level": "WARN", "message": "High memory usage detected", "service": "web-api", "memory_mb": 1024, "threshold_mb": 800}
+{"timestamp": "2024-01-15T10:30:15Z", "level": "ERROR", "message": "Failed to process request", "service": "web-api", "error": {"type": "ValidationError", "field": "email", "details": "Invalid email format"}, "request_id": "req-12345"}
+{"timestamp": "2024-01-15T10:30:20Z", "level": "INFO", "message": "User login successful", "service": "auth", "user_id": 42, "ip_address": "192.168.1.100", "user_agent": "Mozilla/5.0"}
+{"timestamp": "2024-01-15T10:30:25Z", "level": "DEBUG", "message": "Cache hit", "service": "web-api", "cache_key": "user:42:profile", "ttl_seconds": 300}
+{"timestamp": "2024-01-15T10:30:30Z", "level": "INFO", "message": "API request completed", "service": "web-api", "method": "GET", "path": "/api/users/42", "status_code": 200, "duration_ms": 45}
