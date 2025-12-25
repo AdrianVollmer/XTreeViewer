@@ -7,6 +7,22 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+/// Maximum size for a single attribute value (1MB)
+/// Prevents memory exhaustion from extremely large attribute values
+const MAX_ATTRIBUTE_VALUE_SIZE: usize = 1024 * 1024; // 1MB
+
+/// Maximum number of attributes per LDIF entry
+/// Prevents memory exhaustion from entries with excessive attributes
+const MAX_ATTRIBUTES_PER_ENTRY: usize = 100;
+
+/// Maximum number of values for multi-valued attributes
+/// Prevents memory exhaustion from attributes with excessive values
+const MAX_VALUES_PER_ATTRIBUTE: usize = 1000;
+
+/// Maximum total index size (100MB)
+/// Prevents unbounded memory growth during index building
+const MAX_INDEX_SIZE_BYTES: usize = 100 * 1024 * 1024; // 100MB
+
 pub struct LdifParser;
 
 impl Parser for LdifParser {
@@ -362,9 +378,13 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
     let mut index = LdifIndex::new(0);
     let mut dn_to_entry_id: HashMap<String, usize> = HashMap::new();
 
+    // Track estimated index size to prevent memory exhaustion
+    let mut estimated_index_size: usize = 0;
+
     // Add root node
     let root_entry = IndexEntry::new(0, None, NodeType::Root);
     let root_id = index.add_entry(root_entry);
+    estimated_index_size += std::mem::size_of::<IndexEntry>() + "root".len();
 
     let mut current_offset = 0u64;
     let mut lines_iter = reader.lines();
@@ -431,10 +451,13 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                 Some(parent_entry_id),
                 NodeType::Entry {
                     dn: dn.clone(),
-                    rdn,
+                    rdn: rdn.clone(),
                 },
             );
             let entry_id = index.add_entry(entry_node);
+
+            // Track index size
+            estimated_index_size += std::mem::size_of::<IndexEntry>() + dn.len() + rdn.len();
 
             // Store DN to entry ID mapping
             dn_to_entry_id.insert(dn.clone(), entry_id);
@@ -444,13 +467,53 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
 
             // Parse attributes from this entry
             let mut attr_map: HashMap<String, Vec<String>> = HashMap::new();
-            attr_map.insert("dn".to_string(), vec![dn]);
+
+            // Truncate DN if too large
+            let dn_truncated = if dn.len() > MAX_ATTRIBUTE_VALUE_SIZE {
+                eprintln!(
+                    "Warning: DN exceeds {} bytes, truncating (entry at offset {})",
+                    MAX_ATTRIBUTE_VALUE_SIZE, entry_offset
+                );
+                dn[..MAX_ATTRIBUTE_VALUE_SIZE].to_string()
+            } else {
+                dn.clone()
+            };
+            attr_map.insert("dn".to_string(), vec![dn_truncated]);
+
+            let mut attribute_count = 1; // Already have 'dn'
 
             // Read and parse attributes until empty line
             if !next_line_buf.is_empty() && !next_line_buf.trim().is_empty() {
                 // Process the line we already read
-                if let Ok((key, value)) = parse_attribute_line(&next_line_buf) {
-                    attr_map.entry(key).or_default().push(value);
+                if let Ok((key, mut value)) = parse_attribute_line(&next_line_buf) {
+                    if attribute_count < MAX_ATTRIBUTES_PER_ENTRY {
+                        // Truncate value if too large
+                        if value.len() > MAX_ATTRIBUTE_VALUE_SIZE {
+                            eprintln!(
+                                "Warning: Attribute '{}' value exceeds {} bytes, truncating (entry at offset {})",
+                                key, MAX_ATTRIBUTE_VALUE_SIZE, entry_offset
+                            );
+                            value.truncate(MAX_ATTRIBUTE_VALUE_SIZE);
+                        }
+
+                        let values = attr_map.entry(key.clone()).or_default();
+                        if values.len() < MAX_VALUES_PER_ATTRIBUTE {
+                            values.push(value);
+                            if values.len() == 1 {
+                                attribute_count += 1;
+                            }
+                        } else {
+                            eprintln!(
+                                "Warning: Attribute '{}' has too many values (>{} limit), skipping (entry at offset {})",
+                                key, MAX_VALUES_PER_ATTRIBUTE, entry_offset
+                            );
+                        }
+                    } else {
+                        eprintln!(
+                            "Warning: Entry has too many attributes (>{} limit), skipping remaining (entry at offset {})",
+                            MAX_ATTRIBUTES_PER_ENTRY, entry_offset
+                        );
+                    }
                 }
             }
 
@@ -481,8 +544,32 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                     }
                 }
 
-                if let Ok((key, value)) = parse_attribute_line(&logical_line) {
-                    attr_map.entry(key).or_default().push(value);
+                if let Ok((key, mut value)) = parse_attribute_line(&logical_line) {
+                    if attribute_count < MAX_ATTRIBUTES_PER_ENTRY {
+                        // Truncate value if too large
+                        if value.len() > MAX_ATTRIBUTE_VALUE_SIZE {
+                            eprintln!(
+                                "Warning: Attribute '{}' value exceeds {} bytes, truncating (entry at offset {})",
+                                key, MAX_ATTRIBUTE_VALUE_SIZE, entry_offset
+                            );
+                            value.truncate(MAX_ATTRIBUTE_VALUE_SIZE);
+                        }
+
+                        let values = attr_map.entry(key.clone()).or_default();
+                        if values.len() < MAX_VALUES_PER_ATTRIBUTE {
+                            values.push(value);
+                            if values.len() == 1 {
+                                attribute_count += 1;
+                            }
+                        } else {
+                            eprintln!(
+                                "Warning: Attribute '{}' has too many values (>{} limit), skipping (entry at offset {})",
+                                key, MAX_VALUES_PER_ATTRIBUTE, entry_offset
+                            );
+                        }
+                    }
+                    // Note: If we've hit MAX_ATTRIBUTES_PER_ENTRY, we silently skip
+                    // to avoid spamming warnings for every subsequent attribute
                 }
             }
 
@@ -490,6 +577,19 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
             let virtual_node = IndexEntry::new(0, Some(entry_id), NodeType::VirtualAttributes);
             let virtual_id = index.add_entry(virtual_node);
             index.add_child(entry_id, virtual_id);
+            estimated_index_size += std::mem::size_of::<IndexEntry>() + "@attributes".len();
+
+            // Check if we're approaching the index size limit
+            if estimated_index_size > MAX_INDEX_SIZE_BYTES {
+                pb.finish_with_message("Index size limit exceeded");
+                return Err(XtvError::LdifParse {
+                    line: 0,
+                    message: format!(
+                        "Index size exceeded {} bytes limit at offset {} - file may be malicious or corrupted",
+                        MAX_INDEX_SIZE_BYTES, current_offset
+                    ),
+                });
+            }
 
             // Sort attribute keys alphanumerically
             let mut sorted_keys: Vec<_> = attr_map.keys().collect();
@@ -509,6 +609,8 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                     );
                     let attr_id = index.add_entry(attr_node);
                     index.add_child(virtual_id, attr_id);
+                    estimated_index_size +=
+                        std::mem::size_of::<IndexEntry>() + key.len() + values[0].len();
                 } else {
                     for (idx, value) in values.iter().enumerate() {
                         let label = format!("{} [{}]", key, idx);
@@ -516,12 +618,14 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                             0,
                             Some(virtual_id),
                             NodeType::Attribute {
-                                key: label,
+                                key: label.clone(),
                                 value: value.clone(),
                             },
                         );
                         let attr_id = index.add_entry(attr_node);
                         index.add_child(virtual_id, attr_id);
+                        estimated_index_size +=
+                            std::mem::size_of::<IndexEntry>() + label.len() + value.len();
                     }
                 }
             }
