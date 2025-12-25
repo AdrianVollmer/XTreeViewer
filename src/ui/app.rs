@@ -15,6 +15,10 @@ use ratatui::{
 };
 use std::io;
 
+/// Maximum number of nodes to search through
+/// Prevents memory exhaustion when searching large streaming trees
+const MAX_SEARCH_NODES: usize = 100_000;
+
 pub struct App {
     tree: TreeVariant,
     tree_view: TreeView,
@@ -519,17 +523,30 @@ impl App {
             return;
         }
 
-        // Get all visible nodes from tree_view
-        let all_nodes = self.collect_all_nodes(self.tree.root_id());
-
         let query = if self.case_sensitive {
             self.search_query.clone()
         } else {
             self.search_query.to_lowercase()
         };
 
-        for node_id in all_nodes {
+        // Use iterative depth-first traversal with a stack to avoid collecting all nodes
+        // This prevents memory exhaustion on large streaming trees
+        let mut stack = vec![self.tree.root_id()];
+        let mut nodes_searched = 0;
+
+        while let Some(node_id) = stack.pop() {
+            // Enforce search limit to prevent memory exhaustion
+            nodes_searched += 1;
+            if nodes_searched > MAX_SEARCH_NODES {
+                eprintln!(
+                    "Warning: Search stopped after examining {} nodes (limit reached)",
+                    MAX_SEARCH_NODES
+                );
+                break;
+            }
+
             if let Some(node) = self.tree.get_node(node_id) {
+                // Check if this node matches
                 let matches = if self.case_sensitive {
                     node.label.contains(&query)
                         || node.node_type.contains(&query)
@@ -549,6 +566,13 @@ impl App {
                 if matches {
                     self.search_matches.push(node_id);
                 }
+
+                // Add children to stack for depth-first traversal
+                // Push in reverse order so we process them in original order
+                let children = self.tree.get_children(node_id);
+                for child_id in children.iter().rev() {
+                    stack.push(*child_id);
+                }
             }
         }
 
@@ -557,16 +581,6 @@ impl App {
             self.current_match_index = Some(0);
             self.jump_to_current_match();
         }
-    }
-
-    // Collect all node IDs in the tree
-    fn collect_all_nodes(&self, node_id: usize) -> Vec<usize> {
-        let mut nodes = vec![node_id];
-        let children = self.tree.get_children(node_id);
-        for child_id in children {
-            nodes.extend(self.collect_all_nodes(child_id));
-        }
-        nodes
     }
 
     // Jump to the current search match
