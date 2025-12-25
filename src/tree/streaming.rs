@@ -94,6 +94,19 @@ impl LdifIndex {
 }
 
 /// Streaming tree that loads nodes on-demand from disk
+///
+/// # Performance Note
+///
+/// This implementation uses blocking I/O operations. On network-mounted filesystems
+/// (NFS, SMB, sshfs) or slow/unresponsive storage devices, operations may block
+/// indefinitely without timeout. For best performance and reliability, use files
+/// on local storage.
+///
+/// # Known Limitations
+///
+/// - No timeout support for I/O operations (would require async/tokio)
+/// - File operations may hang on unresponsive filesystems
+/// - Errors are reported to stderr but UI remains blocked during I/O
 pub struct StreamingTree {
     /// Path to the LDIF file
     file_path: PathBuf,
@@ -118,12 +131,20 @@ impl std::fmt::Debug for StreamingTree {
 
 impl StreamingTree {
     /// Create a new streaming tree
+    ///
+    /// Opens the LDIF file and creates a persistent reader. This operation may block
+    /// on network filesystems. Returns an error if the file cannot be opened.
     pub fn new(file_path: PathBuf, index: LdifIndex) -> std::io::Result<Self> {
         // Cache size: 1000 nodes should be enough for typical navigation
         let cache_size = NonZeroUsize::new(1000).unwrap();
 
         // Open the file once and keep a persistent reader
-        let file = File::open(&file_path)?;
+        // Note: This may block on network filesystems without timeout
+        let file = File::open(&file_path).map_err(|e| {
+            eprintln!("Error: Failed to open file {:?}: {}", file_path, e);
+            eprintln!("Hint: Ensure the file exists and is on a responsive filesystem.");
+            e
+        })?;
         let reader = BufReader::new(file);
 
         Ok(Self {
@@ -181,20 +202,42 @@ impl StreamingTree {
     }
 
     /// Load a node from disk by reading from its offset
+    ///
+    /// This performs blocking I/O operations. Returns None if the operation fails.
+    /// A MAX_LINES limit prevents infinite loops from corrupt data.
     fn load_node(&self, id: usize) -> Option<TreeNode> {
         let entry = self.index.get_entry(id)?;
         let offset = entry.offset;
 
         // Use the persistent reader and seek to offset
         let mut reader = self.reader.borrow_mut();
-        reader.seek(SeekFrom::Start(offset)).ok()?;
+        if let Err(e) = reader.seek(SeekFrom::Start(offset)) {
+            eprintln!(
+                "Warning: Failed to seek to offset {} in file {:?}: {}",
+                offset, self.file_path, e
+            );
+            return None;
+        }
 
         // Read lines until we hit an empty line (end of entry)
         let mut lines = Vec::new();
         let mut line = String::new();
+        let mut line_count = 0;
+        const MAX_LINES: usize = 1000; // Prevent infinite loops
 
         loop {
             line.clear();
+
+            // Check for excessive lines (potential infinite loop or corruption)
+            line_count += 1;
+            if line_count > MAX_LINES {
+                eprintln!(
+                    "Warning: Read more than {} lines for node {}, stopping",
+                    MAX_LINES, id
+                );
+                break;
+            }
+
             match reader.read_line(&mut line) {
                 Ok(0) => break, // EOF
                 Ok(_) => {
@@ -204,7 +247,13 @@ impl StreamingTree {
                     }
                     lines.push(trimmed.to_string());
                 }
-                Err(_) => return None,
+                Err(e) => {
+                    eprintln!(
+                        "Warning: I/O error reading from file {:?}: {}",
+                        self.file_path, e
+                    );
+                    return None;
+                }
             }
         }
 
