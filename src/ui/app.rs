@@ -19,6 +19,25 @@ use std::io;
 /// Prevents memory exhaustion when searching large streaming trees
 const MAX_SEARCH_NODES: usize = 100_000;
 
+/// Number of lines to scroll for page up/down operations
+const PAGE_SCROLL_LINES: usize = 10;
+
+/// Help popup width
+const HELP_POPUP_WIDTH: u16 = 80;
+
+/// Help popup height
+const HELP_POPUP_HEIGHT: u16 = 30;
+
+/// Print popup width as fraction of screen width (4/5)
+const PRINT_POPUP_WIDTH_FRACTION: u16 = 4;
+const PRINT_POPUP_WIDTH_DIVISOR: u16 = 5;
+const PRINT_POPUP_MAX_WIDTH: u16 = 100;
+
+/// Print popup height as fraction of screen height (3/4)
+const PRINT_POPUP_HEIGHT_FRACTION: u16 = 3;
+const PRINT_POPUP_HEIGHT_DIVISOR: u16 = 4;
+const PRINT_POPUP_MAX_HEIGHT: u16 = 30;
+
 pub struct App {
     tree: TreeVariant,
     tree_view: TreeView,
@@ -381,12 +400,12 @@ impl App {
                 self.tree_view.collapse_all_siblings_deep(&self.tree);
             }
             KeyCode::PageUp | KeyCode::Char('[') => {
-                for _ in 0..10 {
+                for _ in 0..PAGE_SCROLL_LINES {
                     self.tree_view.navigate_up();
                 }
             }
             KeyCode::PageDown | KeyCode::Char(']') => {
-                for _ in 0..10 {
+                for _ in 0..PAGE_SCROLL_LINES {
                     self.tree_view.navigate_down(&self.tree);
                 }
             }
@@ -646,8 +665,8 @@ impl App {
 
         // Create centered popup area
         let area = frame.size();
-        let popup_width = 80.min(area.width - 4);
-        let popup_height = 30.min(area.height - 4);
+        let popup_width = HELP_POPUP_WIDTH.min(area.width - 4);
+        let popup_height = HELP_POPUP_HEIGHT.min(area.height - 4);
         let popup_x = (area.width - popup_width) / 2;
         let popup_y = (area.height - popup_height) / 2;
 
@@ -745,8 +764,11 @@ impl App {
         if let Some(content) = &self.print_content {
             // Create centered popup area
             let area = frame.size();
-            let popup_width = (area.width * 4 / 5).min(100);
-            let popup_height = (area.height * 3 / 4).min(30);
+            let popup_width = (area.width * PRINT_POPUP_WIDTH_FRACTION / PRINT_POPUP_WIDTH_DIVISOR)
+                .min(PRINT_POPUP_MAX_WIDTH);
+            let popup_height = (area.height * PRINT_POPUP_HEIGHT_FRACTION
+                / PRINT_POPUP_HEIGHT_DIVISOR)
+                .min(PRINT_POPUP_MAX_HEIGHT);
             let popup_x = (area.width - popup_width) / 2;
             let popup_y = (area.height - popup_height) / 2;
 

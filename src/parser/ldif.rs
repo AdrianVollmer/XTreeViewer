@@ -23,6 +23,13 @@ const MAX_VALUES_PER_ATTRIBUTE: usize = 1000;
 /// Prevents unbounded memory growth during index building
 const MAX_INDEX_SIZE_BYTES: usize = 100 * 1024 * 1024; // 100MB
 
+/// Maximum bytes to show in binary data hex preview
+/// Binary attributes larger than this show size only
+const BINARY_INLINE_PREVIEW_LIMIT: usize = 64;
+
+/// Number of bytes to show in hex preview
+const HEX_PREVIEW_BYTES: usize = 32;
+
 pub struct LdifParser;
 
 impl Parser for LdifParser {
@@ -302,7 +309,7 @@ fn compute_rdn(dn: &str, parent: Option<&str>) -> String {
 fn hex_preview(bytes: &[u8]) -> String {
     bytes
         .iter()
-        .take(32)
+        .take(HEX_PREVIEW_BYTES)
         .map(|b| format!("{:02x}", b))
         .collect::<Vec<_>>()
         .join(" ")
@@ -604,7 +611,7 @@ fn parse_attribute_line(line: &str) -> Result<(String, String)> {
             Ok(bytes) => match String::from_utf8(bytes.clone()) {
                 Ok(s) => Ok((key.to_string(), s)),
                 Err(_) => {
-                    if bytes.len() <= 64 {
+                    if bytes.len() <= BINARY_INLINE_PREVIEW_LIMIT {
                         Ok((
                             key.to_string(),
                             format!("<binary: {}>", hex_preview(&bytes)),

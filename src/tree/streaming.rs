@@ -5,6 +5,10 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
+/// LRU cache size for streaming tree nodes
+/// Tuned for typical navigation patterns - holds approximately 250KB-1MB of nodes
+const STREAMING_CACHE_SIZE: usize = 1000;
+
 /// Type of node in the index
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
@@ -135,8 +139,8 @@ impl StreamingTree {
     /// Opens the LDIF file and creates a persistent reader. This operation may block
     /// on network filesystems. Returns an error if the file cannot be opened.
     pub fn new(file_path: PathBuf, index: LdifIndex) -> std::io::Result<Self> {
-        // Cache size: 1000 nodes should be enough for typical navigation
-        let cache_size = NonZeroUsize::new(1000).unwrap();
+        // Cache size: holds recently accessed nodes for fast repeat access
+        let cache_size = NonZeroUsize::new(STREAMING_CACHE_SIZE).unwrap();
 
         // Open the file once and keep a persistent reader
         // Note: This may block on network filesystems without timeout
