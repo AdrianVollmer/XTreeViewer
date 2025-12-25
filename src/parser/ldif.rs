@@ -535,7 +535,7 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
 
     pb.finish_with_message("Index complete");
 
-    Ok(StreamingTree::new(file_path.to_path_buf(), index))
+    StreamingTree::new(file_path.to_path_buf(), index).map_err(|e| XtvError::Io(e))
 }
 
 /// Parse an attribute line (extracted from LdifFileParser for reuse)

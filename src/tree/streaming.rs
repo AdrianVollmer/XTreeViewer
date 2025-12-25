@@ -94,7 +94,6 @@ impl LdifIndex {
 }
 
 /// Streaming tree that loads nodes on-demand from disk
-#[derive(Debug)]
 pub struct StreamingTree {
     /// Path to the LDIF file
     file_path: PathBuf,
@@ -102,18 +101,37 @@ pub struct StreamingTree {
     index: LdifIndex,
     /// LRU cache for recently accessed nodes
     cache: std::cell::RefCell<LruCache<usize, TreeNode>>,
+    /// Persistent file reader to avoid reopening file on every node load
+    reader: std::cell::RefCell<BufReader<File>>,
+}
+
+impl std::fmt::Debug for StreamingTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamingTree")
+            .field("file_path", &self.file_path)
+            .field("index", &self.index)
+            .field("cache", &self.cache)
+            .field("reader", &"<BufReader<File>>")
+            .finish()
+    }
 }
 
 impl StreamingTree {
     /// Create a new streaming tree
-    pub fn new(file_path: PathBuf, index: LdifIndex) -> Self {
+    pub fn new(file_path: PathBuf, index: LdifIndex) -> std::io::Result<Self> {
         // Cache size: 1000 nodes should be enough for typical navigation
         let cache_size = NonZeroUsize::new(1000).unwrap();
-        Self {
+
+        // Open the file once and keep a persistent reader
+        let file = File::open(&file_path)?;
+        let reader = BufReader::new(file);
+
+        Ok(Self {
             file_path,
             index,
             cache: std::cell::RefCell::new(LruCache::new(cache_size)),
-        }
+            reader: std::cell::RefCell::new(reader),
+        })
     }
 
     /// Get the root node ID
@@ -167,9 +185,8 @@ impl StreamingTree {
         let entry = self.index.get_entry(id)?;
         let offset = entry.offset;
 
-        // Open file and seek to offset
-        let file = File::open(&self.file_path).ok()?;
-        let mut reader = BufReader::new(file);
+        // Use the persistent reader and seek to offset
+        let mut reader = self.reader.borrow_mut();
         reader.seek(SeekFrom::Start(offset)).ok()?;
 
         // Read lines until we hit an empty line (end of entry)
