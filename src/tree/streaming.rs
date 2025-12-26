@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// LRU cache size for streaming tree nodes
 /// Tuned for typical navigation patterns - holds approximately 250KB-1MB of nodes
@@ -117,7 +118,8 @@ pub struct StreamingTree {
     /// In-memory index
     index: LdifIndex,
     /// LRU cache for recently accessed nodes
-    cache: std::cell::RefCell<LruCache<usize, TreeNode>>,
+    /// Uses Arc to avoid expensive clones on cache hits
+    cache: std::cell::RefCell<LruCache<usize, Arc<TreeNode>>>,
     /// Persistent file reader to avoid reopening file on every node load
     reader: std::cell::RefCell<BufReader<File>>,
 }
@@ -165,21 +167,24 @@ impl StreamingTree {
     }
 
     /// Get a node by ID (loads from disk if not in cache)
-    pub fn get_node(&self, id: usize) -> Option<TreeNode> {
+    /// Returns Arc<TreeNode> to avoid expensive clones on cache hits
+    pub fn get_node(&self, id: usize) -> Option<Arc<TreeNode>> {
         // Check cache first
         {
             let mut cache = self.cache.borrow_mut();
-            if let Some(node) = cache.get(&id) {
-                return Some(node.clone());
+            if let Some(node_arc) = cache.get(&id) {
+                // Arc::clone is cheap - just increments reference count
+                return Some(Arc::clone(node_arc));
             }
         }
 
         // Load from disk
         if let Some(node) = self.load_node(id) {
-            // Store in cache
+            // Wrap in Arc before caching
+            let node_arc = Arc::new(node);
             let mut cache = self.cache.borrow_mut();
-            cache.put(id, node.clone());
-            Some(node)
+            cache.put(id, Arc::clone(&node_arc));
+            Some(node_arc)
         } else {
             None
         }

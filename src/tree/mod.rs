@@ -94,10 +94,12 @@ macro_rules! dispatch {
 impl TreeVariant {
     /// Get a reference to a node by ID
     pub fn get_node(&self, id: usize) -> Option<TreeNode> {
-        // Special case: InMemory returns &TreeNode (needs clone), Streaming returns TreeNode
+        // Both variants require cloning to return owned TreeNode
+        // InMemory: clone from &TreeNode
+        // Streaming: clone from Arc<TreeNode> (but cache access is cheap via Arc::clone)
         match self {
             TreeVariant::InMemory(tree) => tree.get_node(id).cloned(),
-            TreeVariant::Streaming(tree) => tree.get_node(id),
+            TreeVariant::Streaming(tree) => tree.get_node(id).map(|arc| (*arc).clone()),
         }
     }
 
