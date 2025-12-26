@@ -477,7 +477,7 @@ impl App {
         let node = self.tree.get_node(node_id)?;
 
         // Convert node to JSON value and pretty print
-        let json_value = self.node_to_json(&node)?;
+        let json_value = self.node_to_json(node_id, &node)?;
         serde_json::to_string_pretty(&json_value).ok()
     }
 
@@ -486,7 +486,7 @@ impl App {
         let node_id = self.tree_view.get_selected_node_id()?;
         let node = self.tree.get_node(node_id)?;
 
-        let json_value = self.node_to_json(&node)?;
+        let json_value = self.node_to_json(node_id, &node)?;
         serde_json::to_string(&json_value).ok()
     }
 
@@ -510,8 +510,13 @@ impl App {
         Some(node.label.clone())
     }
 
-    // Convert a tree node to a JSON value
-    fn node_to_json(&self, node: &crate::tree::TreeNode) -> Option<serde_json::Value> {
+    /// Convert a tree node to a JSON value
+    /// Recursively builds JSON objects and arrays from tree structure
+    fn node_to_json(
+        &self,
+        node_id: usize,
+        node: &crate::tree::TreeNode,
+    ) -> Option<serde_json::Value> {
         use serde_json::{Map, Value};
 
         // For attribute nodes, return the value directly
@@ -531,17 +536,41 @@ impl App {
             }
         }
 
-        // For container nodes, build object or array
+        // For container nodes, recursively build object or array
         if node.node_type == "object" {
-            let map = Map::new();
-            // Get children and build object
-            // This is a simplified version - in reality we'd need to traverse children
-            Some(Value::Object(map))
+            let mut map = Map::new();
+            let children = self.tree.get_children(node_id);
+            for child_id in children {
+                if let Some(child_node) = self.tree.get_node(child_id) {
+                    // Skip virtual attributes node
+                    if child_node.node_type == crate::tree::TreeNode::VIRTUAL_ATTRIBUTES_TYPE {
+                        continue;
+                    }
+                    if let Some(value) = self.node_to_json(child_id, &child_node) {
+                        map.insert(child_node.label.clone(), value);
+                    }
+                }
+            }
+            return Some(Value::Object(map));
         } else if node.node_type == "array" {
-            Some(Value::Array(vec![]))
-        } else {
-            Some(Value::String(node.label.clone()))
+            let mut arr = Vec::new();
+            let children = self.tree.get_children(node_id);
+            for child_id in children {
+                if let Some(child_node) = self.tree.get_node(child_id) {
+                    // Skip virtual attributes node
+                    if child_node.node_type == crate::tree::TreeNode::VIRTUAL_ATTRIBUTES_TYPE {
+                        continue;
+                    }
+                    if let Some(value) = self.node_to_json(child_id, &child_node) {
+                        arr.push(value);
+                    }
+                }
+            }
+            return Some(Value::Array(arr));
         }
+
+        // Default: return label as string
+        Some(Value::String(node.label.clone()))
     }
 
     // Copy text to clipboard
