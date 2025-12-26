@@ -38,6 +38,35 @@ const PRINT_POPUP_HEIGHT_FRACTION: u16 = 3;
 const PRINT_POPUP_HEIGHT_DIVISOR: u16 = 4;
 const PRINT_POPUP_MAX_HEIGHT: u16 = 30;
 
+/// Decode menu options
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DecodeOption {
+    Base64ToText,
+    Base64ToHex,
+    UnixTimestamp,
+    RawValue,
+}
+
+impl DecodeOption {
+    fn all() -> Vec<DecodeOption> {
+        vec![
+            DecodeOption::Base64ToText,
+            DecodeOption::Base64ToHex,
+            DecodeOption::UnixTimestamp,
+            DecodeOption::RawValue,
+        ]
+    }
+
+    fn label(&self) -> &str {
+        match self {
+            DecodeOption::Base64ToText => "Decode Base64 → Text",
+            DecodeOption::Base64ToHex => "Decode Base64 → Hexdump",
+            DecodeOption::UnixTimestamp => "Parse as Unix Timestamp",
+            DecodeOption::RawValue => "Show Raw Value",
+        }
+    }
+}
+
 pub struct App {
     tree: TreeVariant,
     tree_view: TreeView,
@@ -53,6 +82,8 @@ pub struct App {
     case_sensitive: bool,
     cached_path: String,
     last_selected_id: Option<usize>,
+    show_decode_menu: bool,
+    decode_menu_selected: usize,
 }
 
 impl App {
@@ -74,6 +105,8 @@ impl App {
             case_sensitive: false,
             cached_path: String::new(),
             last_selected_id: None,
+            show_decode_menu: false,
+            decode_menu_selected: 0,
         }
     }
 
@@ -178,6 +211,11 @@ impl App {
             self.render_help_popup(frame);
         }
 
+        // Render decode menu if shown
+        if self.show_decode_menu {
+            self.render_decode_menu(frame);
+        }
+
         // Render print popup if content is set
         if self.print_content.is_some() {
             self.render_print_popup(frame);
@@ -233,6 +271,10 @@ impl App {
 
         if self.show_help {
             return self.handle_help_key(key);
+        }
+
+        if self.show_decode_menu {
+            return self.handle_decode_menu_key(key);
         }
 
         if self.search_mode {
@@ -291,6 +333,33 @@ impl App {
             KeyCode::Char(c) => {
                 self.search_query.push(c);
                 self.perform_search();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handle key press when decode menu is visible
+    fn handle_decode_menu_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.show_decode_menu = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.decode_menu_selected > 0 {
+                    self.decode_menu_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = DecodeOption::all().len() - 1;
+                if self.decode_menu_selected < max {
+                    self.decode_menu_selected += 1;
+                }
+            }
+            KeyCode::Enter => {
+                // Execute the selected decode option
+                self.execute_decode_option();
+                self.show_decode_menu = false;
             }
             _ => {}
         }
@@ -461,6 +530,13 @@ impl App {
             KeyCode::Char('N') => {
                 self.previous_match();
             }
+            KeyCode::Char('d') => {
+                // Only show decode menu if we're on a node with a value
+                if self.get_node_string_value().is_some() {
+                    self.show_decode_menu = true;
+                    self.decode_menu_selected = 0;
+                }
+            }
             _ => {}
         }
 
@@ -508,6 +584,123 @@ impl App {
         let node_id = self.tree_view.get_selected_node_id()?;
         let node = self.tree.get_node(node_id)?;
         Some(node.label.clone())
+    }
+
+    /// Execute the selected decode option
+    fn execute_decode_option(&mut self) {
+        let value = match self.get_node_string_value() {
+            Some(v) => v,
+            None => return,
+        };
+
+        let options = DecodeOption::all();
+        if self.decode_menu_selected >= options.len() {
+            return;
+        }
+
+        let option = options[self.decode_menu_selected];
+        let decoded = match option {
+            DecodeOption::Base64ToText => self.decode_base64_to_text(&value),
+            DecodeOption::Base64ToHex => self.decode_base64_to_hex(&value),
+            DecodeOption::UnixTimestamp => self.decode_unix_timestamp(&value),
+            DecodeOption::RawValue => Some(value),
+        };
+
+        if let Some(result) = decoded {
+            self.print_content = Some(result);
+        }
+    }
+
+    /// Decode base64 string to UTF-8 text
+    fn decode_base64_to_text(&self, value: &str) -> Option<String> {
+        use base64::{Engine as _, engine::general_purpose};
+
+        let decoded = general_purpose::STANDARD.decode(value.trim()).ok()?;
+        String::from_utf8(decoded).ok()
+    }
+
+    /// Decode base64 string to hexdump
+    fn decode_base64_to_hex(&self, value: &str) -> Option<String> {
+        use base64::{Engine as _, engine::general_purpose};
+
+        let decoded = general_purpose::STANDARD.decode(value.trim()).ok()?;
+        Some(self.format_hexdump(&decoded))
+    }
+
+    /// Format bytes as hexdump with ASCII preview
+    fn format_hexdump(&self, bytes: &[u8]) -> String {
+        let mut result = String::new();
+        const BYTES_PER_LINE: usize = 16;
+
+        for (line_num, chunk) in bytes.chunks(BYTES_PER_LINE).enumerate() {
+            // Offset
+            result.push_str(&format!("{:08x}  ", line_num * BYTES_PER_LINE));
+
+            // Hex bytes
+            for (i, byte) in chunk.iter().enumerate() {
+                if i == 8 {
+                    result.push(' '); // Extra space in middle
+                }
+                result.push_str(&format!("{:02x} ", byte));
+            }
+
+            // Padding if last line is short
+            if chunk.len() < BYTES_PER_LINE {
+                for i in chunk.len()..BYTES_PER_LINE {
+                    if i == 8 {
+                        result.push(' ');
+                    }
+                    result.push_str("   ");
+                }
+            }
+
+            // ASCII preview
+            result.push_str(" |");
+            for byte in chunk {
+                let ch = if byte.is_ascii_graphic() || *byte == b' ' {
+                    *byte as char
+                } else {
+                    '.'
+                };
+                result.push(ch);
+            }
+            result.push_str("|\n");
+        }
+
+        result
+    }
+
+    /// Try to parse value as unix timestamp and convert to human-readable date
+    fn decode_unix_timestamp(&self, value: &str) -> Option<String> {
+        use chrono::{TimeZone, Utc};
+
+        // Try parsing as integer (seconds)
+        if let Ok(timestamp) = value.trim().parse::<i64>() {
+            let dt = Utc.timestamp_opt(timestamp, 0).single()?;
+            return Some(format!(
+                "Unix Timestamp: {}\nUTC: {}\nLocal: {}",
+                timestamp,
+                dt.format("%Y-%m-%d %H:%M:%S UTC"),
+                dt.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S %Z")
+            ));
+        }
+
+        // Try parsing as float (seconds with fractional part)
+        if let Ok(timestamp_f) = value.trim().parse::<f64>() {
+            let secs = timestamp_f.floor() as i64;
+            let nanos = ((timestamp_f - timestamp_f.floor()) * 1_000_000_000.0) as u32;
+            let dt = Utc.timestamp_opt(secs, nanos).single()?;
+            return Some(format!(
+                "Unix Timestamp: {}\nUTC: {}\nLocal: {}",
+                timestamp_f,
+                dt.format("%Y-%m-%d %H:%M:%S%.3f UTC"),
+                dt.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S%.3f %Z")
+            ));
+        }
+
+        None
     }
 
     /// Convert a tree node to a JSON value
@@ -771,7 +964,7 @@ impl App {
             Line::from("  c         Collapse siblings    C         Collapse siblings (deep)"),
             Line::from(""),
             Line::from(vec![Span::styled(
-                "Copy/Print",
+                "Copy/Print/Decode",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -780,6 +973,7 @@ impl App {
             Line::from("  yv        Copy value (compact) pv        Print value (compact)"),
             Line::from("  ys        Copy string value    ps        Print string value"),
             Line::from("  yk        Copy key/label       pk        Print key/label"),
+            Line::from("  d         Decode value (base64, hex, timestamp)"),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Search",
@@ -813,6 +1007,73 @@ impl App {
             .alignment(Alignment::Left);
 
         frame.render_widget(help_paragraph, popup_area);
+    }
+
+    fn render_decode_menu(&self, frame: &mut ratatui::Frame) {
+        use ratatui::{
+            layout::Alignment,
+            style::{Color, Modifier, Style},
+            text::{Line, Span},
+            widgets::{Block, Borders, Clear, List, ListItem},
+        };
+
+        // Create centered popup area
+        let area = frame.size();
+        let popup_width = 60;
+        let popup_height = 10;
+        let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+        let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+
+        let popup_area = ratatui::layout::Rect {
+            x: popup_x,
+            y: popup_y,
+            width: popup_width,
+            height: popup_height,
+        };
+
+        // Clear the area
+        frame.render_widget(Clear, popup_area);
+
+        // Create menu items
+        let options = DecodeOption::all();
+        let items: Vec<ListItem> = options
+            .iter()
+            .enumerate()
+            .map(|(i, option)| {
+                let content = if i == self.decode_menu_selected {
+                    Line::from(vec![
+                        Span::styled(
+                            " → ",
+                            Style::default()
+                                .fg(Color::Green)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            option.label(),
+                            Style::default()
+                                .fg(Color::Green)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])
+                } else {
+                    Line::from(vec![
+                        Span::raw("   "),
+                        Span::styled(option.label(), Style::default().fg(Color::White)),
+                    ])
+                };
+                ListItem::new(content)
+            })
+            .collect();
+
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Decode Value ")
+                .title_alignment(Alignment::Center)
+                .style(Style::default().bg(Color::Black)),
+        );
+
+        frame.render_widget(list, popup_area);
     }
 
     fn render_print_popup(&self, frame: &mut ratatui::Frame) {

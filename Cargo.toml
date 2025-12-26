@@ -42,5 +42,8 @@ indicatif = "0.17"
 # Clipboard support
 arboard = "3.4"
 
+# Date/time handling for timestamp decoding
+chrono = "0.4"
+
 [dev-dependencies]
 tempfile = "3.13"
