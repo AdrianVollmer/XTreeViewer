@@ -5,6 +5,24 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::path::Path;
 
+/// Parser for XML files.
+///
+/// Converts XML documents into XTV's tree structure where:
+/// - XML elements become "element" nodes
+/// - Text content becomes "text" nodes
+/// - XML attributes are stored in a virtual "@attributes" container node
+/// - Each attribute becomes an individual "attribute" node
+///
+/// # Examples
+///
+/// ```ignore
+/// use xtv::parser::xml::XmlParser;
+/// use xtv::parser::Parser;
+///
+/// let parser = XmlParser;
+/// let xml = r#"<root><item id="1">text</item></root>"#;
+/// let tree = parser.parse(xml)?;
+/// ```
 pub struct XmlParser;
 
 impl Parser for XmlParser {
