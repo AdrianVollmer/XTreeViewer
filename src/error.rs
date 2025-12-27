@@ -12,6 +12,9 @@ pub enum XtvError {
     #[error("YAML parsing error: {0}")]
     YamlParse(#[from] serde_yaml::Error),
 
+    #[error("TOML parsing error: {0}")]
+    TomlParse(#[from] toml::de::Error),
+
     #[error("XML parsing error: {0}")]
     XmlParse(String),
 
