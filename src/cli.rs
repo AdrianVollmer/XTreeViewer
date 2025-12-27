@@ -10,7 +10,7 @@ pub struct Cli {
     #[clap(value_name = "FILE")]
     pub file: Option<PathBuf>,
 
-    /// Format to use when reading from stdin (xml, json, html, ldif)
+    /// Format to use when reading from stdin (xml, json, jsonl, html, ldif, toml, yaml)
     #[clap(short, long, value_name = "FORMAT")]
     pub format: Option<String>,
 
