@@ -55,17 +55,6 @@ cargo test
 cargo run -- examples/sample.json
 ```
 
-## Roadmap
-
-- [x] JSON parser
-- [x] XML parser
-- [x] Detail view for node attributes
-- [ ] HTML parser
-- [ ] LDIF parser
-- [ ] Search functionality
-- [ ] Lazy loading for large datasets
-- [ ] Streaming support for very large files
-
 ## License
 
 MIT
