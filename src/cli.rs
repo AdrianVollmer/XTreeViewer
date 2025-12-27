@@ -14,9 +14,13 @@ pub struct Cli {
     #[clap(short, long, value_name = "FORMAT")]
     pub format: Option<String>,
 
-    /// Threshold in bytes for switching to streaming mode (default: 100MB)
-    #[clap(long, value_name = "BYTES", default_value = "104857600")]
-    pub streaming_threshold: u64,
+    /// Path to custom configuration file
+    #[clap(short, long, value_name = "PATH")]
+    pub config: Option<PathBuf>,
+
+    /// Threshold in bytes for switching to streaming mode (overrides config)
+    #[clap(long, value_name = "BYTES")]
+    pub streaming_threshold: Option<u64>,
 
     /// Disable streaming mode (always load entire file into memory)
     #[clap(long)]

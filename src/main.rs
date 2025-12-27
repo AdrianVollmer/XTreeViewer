@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::fs;
 use std::io::{self, Read};
-use xtv::{cli::Cli, parser, tree::TreeVariant, ui::App};
+use xtv::{cli::Cli, config::Config, parser, tree::TreeVariant, ui::App};
 
 fn main() {
     if let Err(e) = run() {
@@ -13,13 +13,22 @@ fn main() {
 fn run() -> xtv::Result<()> {
     let cli = Cli::parse();
 
+    // Load configuration
+    let config = Config::load_with_custom_path(cli.config.as_deref())?;
+
+    // CLI flags override config values
+    let streaming_threshold = cli
+        .streaming_threshold
+        .unwrap_or(config.streaming.threshold_bytes);
+    let streaming_enabled = config.streaming.enabled && !cli.no_streaming;
+
     let tree_variant = if let Some(file_path) = &cli.file {
         // Check file size to determine if we should use streaming
         let metadata = fs::metadata(file_path)?;
         let file_size = metadata.len();
 
-        let should_stream = !cli.no_streaming
-            && file_size > cli.streaming_threshold
+        let should_stream = streaming_enabled
+            && file_size > streaming_threshold
             && file_path
                 .extension()
                 .and_then(|ext| ext.to_str())

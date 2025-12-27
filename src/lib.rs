@@ -3,6 +3,7 @@
 //! A TUI application for viewing tree structures from serialized data files.
 
 pub mod cli;
+pub mod config;
 pub mod error;
 pub mod parser;
 pub mod tree;

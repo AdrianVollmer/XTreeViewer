@@ -1,0 +1,24 @@
+# XTV Configuration File
+# Place this file at ~/.config/xtv/config.toml (or use --config flag)
+
+[ui]
+# Color theme: "dark" or "light"
+theme = "dark"
+
+# Default expanded depth when opening files
+# 0 = collapsed, -1 = fully expanded, N = expand to depth N
+default_expanded_depth = 0
+
+[streaming]
+# Threshold in bytes for switching to streaming mode
+# Files larger than this will use streaming (LDIF only)
+# Default: 104857600 (100MB)
+threshold_bytes = 104857600
+
+# Enable/disable streaming mode
+# Set to false to always load files into memory
+enabled = true
+
+[navigation]
+# Number of lines to scroll for page up/down operations
+page_scroll_lines = 10

@@ -45,5 +45,8 @@ arboard = "3.4"
 # Date/time handling for timestamp decoding
 chrono = "0.4"
 
+# Configuration file parsing
+toml = "0.8"
+
 [dev-dependencies]
 tempfile = "3.13"
