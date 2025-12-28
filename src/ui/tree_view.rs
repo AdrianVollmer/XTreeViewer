@@ -76,7 +76,7 @@ impl TreeView {
     ) -> ListItem<'static> {
         let indent = "  ".repeat(depth);
         let icon = if node.is_virtual_attributes() {
-            // Virtual attribute nodes get hollow/solid diamond
+            // Virtual attribute nodes get hollow/solid triangle
             if self.expanded.contains(&node_id) {
                 "▽" // Hollow triangle down when expanded
             } else {
