@@ -56,6 +56,8 @@ jobs:
       run: |
         cargo install cross --git https://github.com/cross-rs/cross.git --locked --rev 085092ca
         cross build -p xtv --release --target ${{ matrix.target }}
+      env:
+        CROSS_NO_WARNINGS: 0
 
     - name: Run Cargo
       if: ${{ !matrix.cross }}
@@ -66,7 +68,7 @@ jobs:
       run: |
         directory=xtv-${{ matrix.target }}
         mkdir $directory
-        cp README.md LICENSE NOTICE $directory
+        cp README.md LICENSE $directory
         if [ -f target/${{ matrix.target }}/release/xtv.exe ]; then
           cp target/${{ matrix.target }}/release/xtv.exe $directory
           7z a -r $directory.zip $directory
