@@ -6,9 +6,13 @@ tree structures from serialized data files.
 ## Features
 
 - **Interactive TUI**: Navigate tree structures with keyboard controls
-- **Multiple Format Support**: JSON, JSON Lines, YAML, TOML, XML, HTML, LDIF
+- **Multiple Format Support**: JSON, JSON Lines, YAML, TOML, XML, HTML,
+  LDIF
 - **Read-Only Viewer**: Safe exploration of data files
 - **Fast and Lightweight**: Written in Rust for performance
+
+**Disclaimer**: This was entirely vibe coded. I don't know any Rust. Do
+with that information what you must.
 
 ## Installation
 
