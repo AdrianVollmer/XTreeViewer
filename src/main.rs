@@ -27,13 +27,20 @@ fn run() -> xtv::Result<()> {
         let metadata = fs::metadata(file_path)?;
         let file_size = metadata.len();
 
-        let should_stream = streaming_enabled
-            && file_size > streaming_threshold
-            && file_path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|s| s.eq_ignore_ascii_case("ldif"))
-                .unwrap_or(false);
+        // Determine if format is LDIF (from --format flag or file extension)
+        let is_ldif = cli
+            .format
+            .as_ref()
+            .map(|f| f.eq_ignore_ascii_case("ldif"))
+            .unwrap_or_else(|| {
+                file_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|s| s.eq_ignore_ascii_case("ldif"))
+                    .unwrap_or(false)
+            });
+
+        let should_stream = streaming_enabled && file_size > streaming_threshold && is_ldif;
 
         if should_stream {
             // Use streaming mode for large LDIF files
@@ -42,7 +49,12 @@ fn run() -> xtv::Result<()> {
         } else {
             // Use in-memory parsing
             let content = fs::read_to_string(file_path)?;
-            let parser = parser::detect_parser(file_path)?;
+            // Use --format if provided, otherwise detect from file extension
+            let parser = if let Some(format) = &cli.format {
+                parser::get_parser_from_format(format)?
+            } else {
+                parser::detect_parser(file_path)?
+            };
             let tree = parser.parse(&content)?;
             TreeVariant::InMemory(tree)
         }
