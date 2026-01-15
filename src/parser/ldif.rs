@@ -23,13 +23,6 @@ const MAX_VALUES_PER_ATTRIBUTE: usize = 1000;
 /// Prevents unbounded memory growth during index building
 const MAX_INDEX_SIZE_BYTES: usize = 100 * 1024 * 1024; // 100MB
 
-/// Maximum bytes to show in binary data hex preview
-/// Binary attributes larger than this show size only
-const BINARY_INLINE_PREVIEW_LIMIT: usize = 64;
-
-/// Number of bytes to show in hex preview
-const HEX_PREVIEW_BYTES: usize = 32;
-
 pub struct LdifParser;
 
 impl Parser for LdifParser {
@@ -109,7 +102,8 @@ impl<'a> LdifFileParser<'a> {
             });
         }
 
-        let dn = logical_line[3..].trim().to_string();
+        // Parse DN value (may be base64-encoded with dn::)
+        let dn = parse_dn_value(&logical_line[3..], self.line_num)?;
         let mut attributes = Vec::new();
 
         // Read attributes until blank line or EOF
@@ -141,7 +135,7 @@ impl<'a> LdifFileParser<'a> {
 
             // Parse attribute line
             if logical_line.contains(':') {
-                let (key, value) = parse_attribute_line(&logical_line)?;
+                let (key, value) = parse_attribute_line(&logical_line, self.line_num)?;
                 attributes.push((key, value));
             }
         }
@@ -306,15 +300,6 @@ fn compute_rdn(dn: &str, parent: Option<&str>) -> String {
     dn.trim().to_string()
 }
 
-fn hex_preview(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .take(HEX_PREVIEW_BYTES)
-        .map(|b| format!("{:02x}", b))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 /// Build an index for streaming LDIF parsing
 pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
     let file = File::open(file_path)?;
@@ -343,10 +328,12 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
     estimated_index_size += std::mem::size_of::<IndexEntry>() + "root".len();
 
     let mut current_offset = 0u64;
+    let mut current_line_num = 0usize;
     let mut lines_iter = reader.lines();
 
     // Skip version line if present
     if let Some(Ok(first_line)) = lines_iter.next() {
+        current_line_num += 1;
         current_offset += first_line.len() as u64 + 1; // +1 for newline
 
         if !first_line.starts_with("version:") {
@@ -356,11 +343,13 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
             let reader = BufReader::new(file);
             lines_iter = reader.lines();
             current_offset = 0;
+            current_line_num = 0;
         }
     }
 
     // Parse entries and build index
     while let Some(Ok(line)) = lines_iter.next() {
+        current_line_num += 1;
         let line_len = line.len() as u64 + 1; // +1 for newline
 
         // Skip empty lines and comments
@@ -373,16 +362,18 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
         // Check if this is a DN line (start of entry)
         if line.starts_with("dn:") {
             let entry_offset = current_offset;
-            let mut dn = line[3..].trim().to_string();
+            let dn_line_num = current_line_num;
+            let mut dn_raw = line[3..].to_string();
 
             // Handle line folding for DN
             current_offset += line_len;
             let mut next_line_buf = String::new();
             while let Some(Ok(next_line)) = lines_iter.next() {
+                current_line_num += 1;
                 let next_len = next_line.len() as u64 + 1;
                 if next_line.starts_with(' ') {
                     // Continuation line
-                    dn.push_str(&next_line[1..]);
+                    dn_raw.push_str(&next_line[1..]);
                     current_offset += next_len;
                 } else {
                     next_line_buf = next_line;
@@ -390,6 +381,9 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                     break;
                 }
             }
+
+            // Parse DN value (may be base64-encoded)
+            let dn = parse_dn_value(&dn_raw, dn_line_num)?;
 
             // Determine parent DN and compute RDN
             let parent_dn = get_parent_dn(&dn);
@@ -439,9 +433,10 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
             let mut attribute_count = 1; // Already have 'dn'
 
             // Read and parse attributes until empty line
+            let mut attr_line_num = current_line_num;
             if !next_line_buf.is_empty() && !next_line_buf.trim().is_empty() {
                 // Process the line we already read
-                if let Ok((key, mut value)) = parse_attribute_line(&next_line_buf) {
+                if let Ok((key, mut value)) = parse_attribute_line(&next_line_buf, attr_line_num) {
                     if attribute_count < MAX_ATTRIBUTES_PER_ENTRY {
                         // Truncate value if too large
                         if value.len() > MAX_ATTRIBUTE_VALUE_SIZE {
@@ -474,6 +469,8 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
             }
 
             while let Some(Ok(line)) = lines_iter.next() {
+                current_line_num += 1;
+                attr_line_num = current_line_num;
                 let len = line.len() as u64 + 1;
                 current_offset += len;
 
@@ -489,6 +486,7 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                 // Handle line folding
                 let mut logical_line = line.clone();
                 while let Some(Ok(next_line)) = lines_iter.next() {
+                    current_line_num += 1;
                     let next_len = next_line.len() as u64 + 1;
                     if next_line.starts_with(' ') {
                         logical_line.push_str(&next_line[1..]);
@@ -500,7 +498,7 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
                     }
                 }
 
-                if let Ok((key, mut value)) = parse_attribute_line(&logical_line) {
+                if let Ok((key, mut value)) = parse_attribute_line(&logical_line, attr_line_num) {
                     if attribute_count < MAX_ATTRIBUTES_PER_ENTRY {
                         // Truncate value if too large
                         if value.len() > MAX_ATTRIBUTE_VALUE_SIZE {
@@ -539,7 +537,7 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
             if estimated_index_size > MAX_INDEX_SIZE_BYTES {
                 pb.finish_with_message("Index size limit exceeded");
                 return Err(XtvError::LdifParse {
-                    line: 0,
+                    line: current_line_num,
                     message: format!(
                         "Index size exceeded {} bytes limit at offset {} - file may be malicious or corrupted",
                         MAX_INDEX_SIZE_BYTES, current_offset
@@ -598,52 +596,68 @@ pub fn build_ldif_index(file_path: &Path) -> Result<StreamingTree> {
     StreamingTree::new(file_path.to_path_buf(), index).map_err(|e| XtvError::Io(e))
 }
 
-/// Parse an attribute line (extracted from LdifFileParser for reuse)
-fn parse_attribute_line(line: &str) -> Result<(String, String)> {
+/// Parse a DN value which may be base64-encoded (dn:: prefix means base64)
+fn parse_dn_value(value: &str, line_num: usize) -> Result<String> {
     use base64::{Engine as _, engine::general_purpose};
 
-    // Handle three separators: :, ::, :<
-    if let Some(pos) = line.find("::") {
-        // Base64 encoded
-        let key = line[..pos].trim();
-        let encoded = line[pos + 2..].trim();
+    // Check if value starts with ":" indicating base64 encoding (dn::)
+    if let Some(rest) = value.strip_prefix(':') {
+        let encoded = rest.trim();
         match general_purpose::STANDARD.decode(encoded) {
-            Ok(bytes) => match String::from_utf8(bytes.clone()) {
+            Ok(bytes) => String::from_utf8(bytes).map_err(|_| XtvError::LdifParse {
+                line: line_num,
+                message: "DN contains invalid UTF-8 after base64 decoding".to_string(),
+            }),
+            Err(e) => Err(XtvError::LdifParse {
+                line: line_num,
+                message: format!("Base64 decode error in DN: {}", e),
+            }),
+        }
+    } else {
+        // Plain text DN
+        Ok(value.trim().to_string())
+    }
+}
+
+/// Parse an attribute line (extracted from LdifFileParser for reuse)
+fn parse_attribute_line(line: &str, line_num: usize) -> Result<(String, String)> {
+    use base64::{Engine as _, engine::general_purpose};
+
+    // Find the first colon - this is the separator between key and value
+    let Some(colon_pos) = line.find(':') else {
+        return Err(XtvError::LdifParse {
+            line: line_num,
+            message: "Invalid attribute format: no colon found".to_string(),
+        });
+    };
+
+    let key = line[..colon_pos].trim();
+    let after_colon = &line[colon_pos + 1..];
+
+    // Check what follows the first colon to determine encoding
+    if let Some(rest) = after_colon.strip_prefix(':') {
+        // Base64 encoded (::)
+        let encoded = rest.trim();
+        match general_purpose::STANDARD.decode(encoded) {
+            Ok(bytes) => match String::from_utf8(bytes) {
+                // Valid UTF-8: use the decoded string
                 Ok(s) => Ok((key.to_string(), s)),
-                Err(_) => {
-                    if bytes.len() <= BINARY_INLINE_PREVIEW_LIMIT {
-                        Ok((
-                            key.to_string(),
-                            format!("<binary: {}>", hex_preview(&bytes)),
-                        ))
-                    } else {
-                        Ok((
-                            key.to_string(),
-                            format!("<binary data, {} bytes>", bytes.len()),
-                        ))
-                    }
-                }
+                // Binary data: keep original base64 so user can decode with 'd' menu
+                Err(_) => Ok((key.to_string(), encoded.to_string())),
             },
             Err(e) => Err(XtvError::LdifParse {
-                line: 0,
+                line: line_num,
                 message: format!("Base64 decode error: {}", e),
             }),
         }
-    } else if let Some(pos) = line.find(":<") {
-        // URL reference
-        let key = line[..pos].trim();
-        let url = line[pos + 2..].trim();
+    } else if let Some(rest) = after_colon.strip_prefix('<') {
+        // URL reference (:<)
+        let url = rest.trim();
         Ok((key.to_string(), format!("<URL reference: {}>", url)))
-    } else if let Some(pos) = line.find(':') {
-        // Plain value
-        let key = line[..pos].trim();
-        let value = line[pos + 1..].trim();
-        Ok((key.to_string(), value.to_string()))
     } else {
-        Err(XtvError::LdifParse {
-            line: 0,
-            message: "Invalid attribute format".to_string(),
-        })
+        // Plain value (:)
+        let value = after_colon.trim();
+        Ok((key.to_string(), value.to_string()))
     }
 }
 
@@ -740,6 +754,52 @@ objectClass: organizationalPerson
         let tree = parser.parse(ldif).unwrap();
 
         assert!(tree.node_count() > 0);
+    }
+
+    #[test]
+    fn test_base64_encoded_dn() {
+        // "cn=Test,dc=example,dc=com" in base64
+        use base64::{Engine as _, engine::general_purpose};
+        let dn = "cn=Test,dc=example,dc=com";
+        let encoded_dn = general_purpose::STANDARD.encode(dn);
+        let ldif = format!("version: 1\n\ndn:: {}\ncn: Test\n", encoded_dn);
+
+        let parser = LdifParser;
+        let tree = parser.parse(&ldif).unwrap();
+
+        let root = tree.get_node(0).unwrap();
+        assert_eq!(root.children.len(), 1);
+
+        // Entry should have the decoded DN as label
+        let entry = tree.get_node(root.children[0]).unwrap();
+        assert_eq!(entry.label, "cn=Test,dc=example,dc=com");
+    }
+
+    #[test]
+    fn test_attribute_with_double_colon_in_value() {
+        // Test that :: in a plain value doesn't confuse the parser
+        let ldif =
+            "version: 1\n\ndn: cn=Test,dc=example,dc=com\ndescription: value with :: inside\n";
+        let parser = LdifParser;
+        let tree = parser.parse(ldif).unwrap();
+
+        assert!(tree.node_count() > 0);
+
+        // Find the description attribute and check its value
+        let root = tree.get_node(0).unwrap();
+        let entry = tree.get_node(root.children[0]).unwrap();
+        let attrs = tree.get_node(entry.children[0]).unwrap();
+
+        let mut found_description = false;
+        for &child_id in &attrs.children {
+            let child = tree.get_node(child_id).unwrap();
+            if child.label == "description" {
+                let value = &child.attributes[0].value;
+                assert_eq!(value, "value with :: inside");
+                found_description = true;
+            }
+        }
+        assert!(found_description, "Should have found description attribute");
     }
 
     #[test]
