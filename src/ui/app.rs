@@ -43,6 +43,7 @@ const PRINT_POPUP_MAX_HEIGHT: u16 = 30;
 enum DecodeOption {
     Base64ToText,
     Base64ToHex,
+    BinaryToHex,
     UnixTimestamp,
     RawValue,
 }
@@ -52,6 +53,7 @@ impl DecodeOption {
         vec![
             DecodeOption::Base64ToText,
             DecodeOption::Base64ToHex,
+            DecodeOption::BinaryToHex,
             DecodeOption::UnixTimestamp,
             DecodeOption::RawValue,
         ]
@@ -61,6 +63,7 @@ impl DecodeOption {
         match self {
             DecodeOption::Base64ToText => "Decode Base64 → Text",
             DecodeOption::Base64ToHex => "Decode Base64 → Hexdump",
+            DecodeOption::BinaryToHex => "View as Hexdump",
             DecodeOption::UnixTimestamp => "Parse as Unix Timestamp",
             DecodeOption::RawValue => "Show Raw Value",
         }
@@ -602,6 +605,7 @@ impl App {
         let decoded = match option {
             DecodeOption::Base64ToText => self.decode_base64_to_text(&value),
             DecodeOption::Base64ToHex => self.decode_base64_to_hex(&value),
+            DecodeOption::BinaryToHex => Some(self.format_hexdump(value.as_bytes())),
             DecodeOption::UnixTimestamp => self.decode_unix_timestamp(&value),
             DecodeOption::RawValue => Some(value),
         };
